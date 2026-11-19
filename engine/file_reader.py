@@ -1,0 +1,133 @@
+"""Wczytywanie tekstu z plików przesłanych przez użytkownika.
+
+Obsługujemy:
+- pliki tekstowe (.txt, .md, .csv, .log, .json) – bez dodatkowych bibliotek,
+- PDF (PyMuPDF) i Word .docx (python-docx) – najczęstsze formaty umów
+  i dokumentacji medycznej.
+
+Wszystko dzieje się lokalnie, w pamięci. Plik nie jest nigdzie zapisywany.
+"""
+
+import io
+from pathlib import Path
+
+TEXT_EXTENSIONS = {".txt", ".md", ".csv", ".log", ".json"}
+# Znak „nowej strony” (form feed) – oddziela strony PDF w jednym tekście.
+PAGE_BREAK = "\f"
+SUPPORTED_EXTENSIONS = sorted(TEXT_EXTENSIONS | {".pdf", ".docx"})
+
+# Kolejność ma znaczenie: UTF-8 jest najczęstsze, a cp1250 to stare polskie
+# pliki z Windows (bez tego „ł” i „ś” zamieniłyby się w krzaki).
+ENCODINGS = ["utf-8-sig", "utf-8", "cp1250", "iso-8859-2"]
+
+
+class FileReadError(Exception):
+    """Pliku nie da się odczytać (zły format, uszkodzony, pusty)."""
+
+
+def decode_text(data: bytes) -> str:
+    """Zamienia bajty na tekst, próbując kolejnych kodowań."""
+    for encoding in ENCODINGS:
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    raise FileReadError("Nie rozpoznano kodowania pliku tekstowego.")
+
+
+# Znaki, które w PDF udają zwykły myślnik „-”. Generatory PDF (Word, platformy
+# podpisu) często zapisują myślnik jako SOFT HYPHEN (U+00AD). Wtedy NIP
+# „526-025-02-74”, UUID czy data „2025-03-12” wyglądają tak samo na ekranie,
+# ale regex ich nie znajduje – w testowej Karcie Podpisów dane by wyciekły.
+HYPHEN_LOOKALIKES = {
+    "­": "-",  # SOFT HYPHEN
+    "‐": "-",  # HYPHEN
+    "‑": "-",  # NON-BREAKING HYPHEN
+    "−": "-",  # MINUS SIGN
+    "​": "",   # ZERO WIDTH SPACE (niewidoczny, rozbija słowa)
+    "﻿": "",   # BOM w środku tekstu
+}
+_HYPHEN_TABLE = str.maketrans(HYPHEN_LOOKALIKES)
+
+
+def normalize_pdf_text(text: str) -> str:
+    """Ujednolica „podróbki” myślnika i usuwa niewidoczne znaki."""
+    return text.translate(_HYPHEN_TABLE)
+
+
+def read_pdf_pages(data: bytes) -> list[str]:
+    """Zwraca tekst PDF jako listę stron (jedna pozycja = jedna strona)."""
+    # PyMuPDF – ta sama biblioteka, która potem zaczernia dane w PDF.
+    # Dzięki temu tekst, w którym szukamy encji, jest identyczny z tym,
+    # który redaktor znajdzie na stronie.
+    import pymupdf
+
+    try:
+        document = pymupdf.open(stream=data, filetype="pdf")
+        # sort=True układa bloki tekstu w kolejności czytania (z góry na dół,
+        # od lewej do prawej). Bez tego tabele, kolumny i pieczęcie w Kartach
+        # Podpisów (np. Autenti) wychodzą w kolejności, w jakiej generator
+        # zapisał je w pliku – często rozrzucone po całym tekście.
+        pages = [normalize_pdf_text(page.get_text("text", sort=True)).strip()
+                 for page in document]
+    except (RuntimeError, ValueError) as error:
+        raise FileReadError(f"Uszkodzony plik PDF: {error}") from error
+    if not any(pages):
+        # PDF ze skanem to obrazki, nie tekst – potrzebny byłby OCR.
+        raise FileReadError("PDF nie zawiera tekstu (prawdopodobnie to skan).")
+    return pages
+
+
+def read_docx(data: bytes) -> str:
+    from docx import Document
+
+    try:
+        document = Document(io.BytesIO(data))
+    except Exception as error:  # python-docx rzuca różne wyjątki dla złych plików
+        raise FileReadError(f"Uszkodzony plik .docx: {error}") from error
+
+    lines = [paragraph.text for paragraph in document.paragraphs]
+    # Umowy często mają dane stron w tabelach – nie możemy ich pominąć.
+    for table in document.tables:
+        for row in table.rows:
+            lines.append(" | ".join(cell.text for cell in row.cells))
+    return "\n".join(lines).strip()
+
+
+def read_uploaded_pages(filename: str, data: bytes) -> list[str]:
+    """Zwraca tekst pliku jako listę stron.
+
+    PDF ma prawdziwe strony. Pozostałe formaty nie mają stron, więc cały
+    plik to jedna „strona”.
+    """
+    extension = Path(filename).suffix.lower()
+    if extension in TEXT_EXTENSIONS:
+        pages = [decode_text(data)]
+    elif extension == ".pdf":
+        pages = read_pdf_pages(data)
+    elif extension == ".docx":
+        pages = [read_docx(data)]
+    else:
+        raise FileReadError(
+            f"Nieobsługiwany format „{extension}”. "
+            f"Dozwolone: {', '.join(SUPPORTED_EXTENSIONS)}"
+        )
+
+    if not any(page.strip() for page in pages):
+        raise FileReadError("Plik jest pusty.")
+    return pages
+
+
+def join_pages(pages: list[str]) -> str:
+    """Skleja strony w jeden tekst, oddzielając je znakiem końca strony.
+
+    PAGE_BREAK („\\f”) to standardowy znak nowej strony. Dzięki niemu LLM
+    dostaje każdą stronę osobno (patrz llm_masker.split_into_chunks),
+    nawet gdy cały dokument jest jednym tekstem w polu edycji.
+    """
+    return PAGE_BREAK.join(pages)
+
+
+def read_uploaded_file(filename: str, data: bytes) -> str:
+    """Zwraca tekst z pliku (strony sklejone znakiem PAGE_BREAK)."""
+    return join_pages(read_uploaded_pages(filename, data))
