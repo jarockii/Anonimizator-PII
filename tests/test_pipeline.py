@@ -254,6 +254,19 @@ def test_person_forms_do_not_match_other_people():
     assert find_person_forms(text, "Jan Kowalski") == ["Jan Kowalski"]
 
 
+@pytest.mark.parametrize("found, in_text", [
+    # Prawdziwy przypadek (qwen3.5:4b, przyklady/1_*.pdf): model zwrócił
+    # dopełniacz, a na pieczątce był mianownik – nazwisko wyciekało.
+    ("Grzegorza Wróblewskiego", "Grzegorz Wróblewski"),
+    ("Grzegorza Wróblewskiego", "GRZEGORZ WRÓBLEWSKI"),
+    ("Małgorzatą Szczepańską", "Małgorzata Szczepańska"),
+    ("Jan Kowalski", "Jana Kowalskiego"),
+    ("Piotrowi Zalewskiemu", "Piotr Zalewski"),
+])
+def test_person_forms_cross_case(found, in_text):
+    assert find_person_forms(f"Podpis: {in_text}.", found) == [in_text]
+
+
 def test_split_into_chunks_keeps_whole_lines():
     text = "\n".join(f"linia {i} " + "x" * 50 for i in range(20))
     chunks = split_into_chunks(text, max_chars=200)
@@ -307,6 +320,36 @@ def test_request_has_loop_safeguards(monkeypatch):
     assert captured["format"]["properties"]["entities"]["maxItems"] == 20
     assert captured["options"]["num_predict"] == 600
     assert captured["timeout"] <= 60
+
+
+def test_thinking_is_disabled(monkeypatch):
+    # qwen3.5 z włączonym myśleniem zwracał pustą treść i nic nie maskował.
+    captured = {}
+
+    def fake_post(url, json, timeout):
+        captured.update(json)
+        return fake_ollama_reply([])
+
+    monkeypatch.setattr(llm_masker.requests, "post", fake_post)
+    detect_entities("tekst")
+    assert captured["think"] is False
+
+
+def test_empty_answer_cut_by_token_limit_is_an_error(monkeypatch, vault):
+    reply = FakeResponse(payload={"message": {"content": "", "thinking": "Hmm..." * 200},
+                                  "done_reason": "length"})
+    monkeypatch.setattr(llm_masker.requests, "post", lambda *a, **k: reply)
+    with pytest.raises(OllamaError, match="limit"):
+        detect_entities("Jan Kowalski")
+    # W pipeline: wynik wstrzymany do sprawdzenia, a nie „brak danych”.
+    assert anonymize("Jan Kowalski", vault).needs_review
+
+
+def test_cut_answer_with_entities_is_still_used(monkeypatch):
+    content = '{"entities": [{"original": "Jan Kowalski", "tag": "OSOBA"}, {"orig'
+    reply = FakeResponse(payload={"message": {"content": content}, "done_reason": "length"})
+    monkeypatch.setattr(llm_masker.requests, "post", lambda *a, **k: reply)
+    assert [e.original for e in detect_entities("Jan Kowalski")] == ["Jan Kowalski"]
 
 
 def test_truncated_json_keeps_complete_entities():

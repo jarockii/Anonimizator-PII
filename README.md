@@ -25,6 +25,26 @@ streamlit run app.py --server.address localhost
 
 Bez działającej Ollamy aplikacja nadal działa: włącza się tryb samego Regexa i pokazuje ostrzeżenie.
 
+## 🧠 Etap NER (GLiNER2-PII) – opcjonalny
+
+Między Regexem a LLM-em działa model NER [GLiNER2-PII](https://huggingface.co/fastino/gliner2-privacy-filter-PII-multi)
+(Apache-2.0, ok. 0,3 mld parametrów, CPU). Zaznacza osoby, firmy, adresy i loginy w ułamku sekundy,
+a mały LLM dostaje tekst już po nim i szuka tego, co wymaga kontekstu (stanowiska, odmienione formy).
+NER nie generuje tekstu, więc nie halucynuje i nie da się go „przekonać” poleceniem w dokumencie.
+
+```bash
+pip install -r requirements-ner.txt   # PyTorch CPU + gliner2; model ~1,2 GB pobierze się raz
+```
+
+Pomiar na `przyklady/*.pdf` (Regex + NER + qwen2.5:3b): NER 0,16–0,47 s na dokument, LLM 5,7–14,1 s,
+**0 wycieków i 0 nadmiarowo zamaskowanych słów** na sprawdzanej liście. NER znalazł wszystkie osoby
+we wszystkich plikach (pewność 0,86–1,0) i login `tnowak` z przypadku „Log z błędem”, którego model 3B nie łapał.
+Koszt: **~1,4–1,7 GB RAM** (wagi float32). Kwantyzacja int8 psuła model (0 encji), a bfloat16 była 15× wolniejsza
+na CPU – dlatego zostaje float32; NER można wyłączyć w pasku bocznym.
+
+Model był trenowany na EN/FR/ES/DE/IT/PT/NL, po polsku działa zero-shot. Progi pewności per etykieta
+(`engine/ner_masker.py`) są dobrane pomiarem. Kolejny krok: dotrenowanie na polskich danych.
+
 ## 🔒 Zabezpieczenia
 
 - **Tylko localhost.** `.streamlit/config.toml` wymusza `server.address = "localhost"`, limit
@@ -213,7 +233,7 @@ Test umowy e-podpis zrobiono też na prawdziwym 3-stronicowym PDF-ie (Arial, my�
 e-maile, IP oraz 4 sekrety w logu (hasło w JSON, Bearer, hasło w URL bazy, `api_key`).
 
 **Co nie zostało wykryte lub zostało zamaskowane nadmiarowo** (model 3B):
-- login `tnowak` w logu nie został zamaskowany;
+- login `tnowak` w logu nie został zamaskowany (z etapem NER jest już maskowany jako `[LOGIN_1]`);
 - w umowie e-podpis model oznaczył słowa „Pracownik” i „Spółka” jako encje, a „Toyota Corolla” jako firmę (nadmiarowo, ale bezpiecznie);
 - „Prezesa Zarządu” (odmienione) zostało widoczne, a „PREZES ZARZĄDU” na Karcie Podpisów zamaskowane jako `[STANOWISKO_1]`;
 - nazwa platformy „Autenti Sp. z o.o.” w pieczęci raz jest maskowana, a raz nie (zależy od fragmentu);

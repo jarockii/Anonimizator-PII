@@ -20,6 +20,7 @@ from engine.llm_masker import (
     get_model_memory_mb,
     validate_ollama_url,
 )
+from engine.ner_masker import ner_installed, preload_model as preload_ner_model
 from engine.ocr import clear_cache as clear_ocr_cache
 from engine.ocr import ocr_available, ocr_pdf
 from engine.pipeline import anonymize, get_process_peak_ram_mb
@@ -235,6 +236,16 @@ with st.sidebar:
     st.header("⚙️ Konfiguracja")
     base_url = st.text_input("Adres Ollamy", value=OLLAMA_URL)
     model = st.text_input("Model (≤ 4B parametrów)", value=DEFAULT_MODEL)
+    use_ner = st.checkbox("Etap 1b: NER (GLiNER2-PII)", value=ner_installed(),
+                          disabled=not ner_installed(),
+                          help="Szybki model encoder (~0,3 mld parametrów) na CPU: osoby, firmy, "
+                               "adresy, loginy. LLM sprawdza tekst po nim.")
+    if not ner_installed():
+        st.caption("NER niedostępny – zainstaluj: `pip install \"gliner2[local]\"`")
+    elif use_ner:
+        # Wczytanie modelu z dysku trwa ok. 9 s – robimy to w tle od razu
+        # po starcie, a nie przy pierwszym kliknięciu „Anonimizuj”.
+        preload_ner_model()
     use_llm = st.checkbox("Etap 2: wykrywanie kontekstowe (LLM)", value=True)
     if ocr_available():
         st.caption("🖼️ OCR obrazów w PDF: włączony (Tesseract)")
@@ -329,7 +340,7 @@ with tab_mask:
 
             st.session_state.last_result = anonymize(
                 text, vault, use_llm=use_llm, model=model, base_url=base_url,
-                on_progress=show_progress,
+                on_progress=show_progress, use_ner=use_ner,
             )
             progress.empty()
             st.session_state.last_result.review_reasons.extend(ocr_review_reasons())
@@ -337,8 +348,12 @@ with tab_mask:
 
     result = st.session_state.get("last_result")
     if result:
-        m1, m2, m3, m4, m5 = st.columns(5)
+        if result.ner_error:
+            st.info(f"Etap NER pominięty: {result.ner_error}")
+        m1, m_ner, m2, m3, m4, m5 = st.columns(6)
         m1.metric("Regex", f"{result.regex_ms:.1f} ms")
+        m_ner.metric("NER", f"{result.ner_ms / 1000:.2f} s"
+                     if use_ner and not result.ner_error else "wył.")
         m2.metric("LLM", f"{result.llm_ms / 1000:.2f} s" if use_llm else "wył.")
         m3.metric("Wykryte encje", len(result.entities))
         ram = get_process_peak_ram_mb()

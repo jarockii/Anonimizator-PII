@@ -1,4 +1,4 @@
-"""Spina etapy w jeden pipeline: Regex -> LLM -> wynik + metryki."""
+"""Spina etapy w jeden pipeline: Regex -> NER -> LLM -> wynik + metryki."""
 
 import sys
 import time
@@ -13,6 +13,7 @@ from engine.llm_masker import (
     detect_entities,
     find_injection_markers,
 )
+from engine import ner_masker
 from engine.file_reader import normalize_text
 from engine.regex_masker import mask_with_regex
 from engine.vault import Vault
@@ -23,7 +24,9 @@ class AnonymizationResult:
     masked_text: str
     entities: list[dict] = field(default_factory=list)
     regex_ms: float = 0.0
+    ner_ms: float = 0.0
     llm_ms: float = 0.0
+    ner_error: str | None = None  # NER niedostępny (brak pakietu/modelu)
     llm_error: str | None = None  # wypełnione, gdy LLM zawiódł (działa sam Regex)
     # Powody, dla których wynik NIE jest gotowy do wysłania bez sprawdzenia
     # (fail-closed): LLM nie działał albo dokument wygląda na prompt injection.
@@ -31,7 +34,7 @@ class AnonymizationResult:
 
     @property
     def total_ms(self) -> float:
-        return self.regex_ms + self.llm_ms
+        return self.regex_ms + self.ner_ms + self.llm_ms
 
     @property
     def needs_review(self) -> bool:
@@ -45,6 +48,7 @@ def anonymize(
     model: str = DEFAULT_MODEL,
     base_url: str = OLLAMA_URL,
     on_progress: Callable[[int, int], None] | None = None,
+    use_ner: bool = False,
 ) -> AnonymizationResult:
     """Uruchamia cały pipeline anonimizacji."""
     # Etap 0: normalizacja Unicode (niewidoczne znaki, cyfry pełnej szerokości).
@@ -56,8 +60,29 @@ def anonymize(
     result = AnonymizationResult(masked_text=masked)
     result.regex_ms = (time.perf_counter() - start) * 1000
 
+    # Etap 1b: NER (GLiNER2-PII). Szybko zaznacza osoby, firmy, adresy
+    # i loginy. Brak pakietu lub modelu nie zatrzymuje pipeline'u – LLM
+    # i tak przejrzy tekst, więc to nie jest powód do wstrzymania wyniku.
+    if use_ner and masked.strip():
+        start = time.perf_counter()
+        try:
+            ner_entities = ner_masker.detect_entities(masked)
+            masked, ner_found = apply_entities(masked, ner_entities, vault, source="ner")
+            found.extend(ner_found)
+            result.masked_text = masked
+        except ner_masker.NerUnavailableError as error:
+            result.ner_error = str(error)
+        result.ner_ms = (time.perf_counter() - start) * 1000
+        if result.ner_error and not use_llm:
+            result.review_reasons.append(
+                "Ani NER, ani LLM nie sprawdziły tekstu – imiona, nazwiska i firmy mogą "
+                f"być NIEZAMASKOWANE. Przyczyna: {result.ner_error}"
+            )
+
     # Etap 2: LLM. Gdy Ollama nie działa, NIE przerywamy – zwracamy wynik
-    # z samego Regexa i komunikat. Lepsza częściowa ochrona niż żadna.
+    # z samego Regexa (i NER) i komunikat. Lepsza częściowa ochrona niż żadna.
+    # LLM dostaje tekst już zamaskowany przez NER: ma mniej do roboty i może
+    # skupić się na tym, co wymaga kontekstu.
     if use_llm and masked.strip():
         start = time.perf_counter()
         try:

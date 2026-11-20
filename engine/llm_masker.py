@@ -263,6 +263,11 @@ def _detect_in_chunk(text: str, model: str, base_url: str, timeout: float) -> li
             {"role": "user", "content": wrap_untrusted(text)},
         ],
         "stream": False,
+        # Wyłączamy „myślenie” (qwen3.5, qwen3…). Bez tego model z trybem
+        # thinking zużywał cały limit num_predict na rozważania i zwracał
+        # PUSTĄ odpowiedź – po cichu nic nie maskując. Modele bez trybu
+        # thinking (qwen2.5) ignorują ten parametr.
+        "think": False,
         # Structured Outputs: schemat generujemy z modelu Pydantic.
         "format": EntityList.model_json_schema(),
         # Model zostaje w pamięci przez 30 min – kolejne zapytania w demo
@@ -296,10 +301,50 @@ def _detect_in_chunk(text: str, model: str, base_url: str, timeout: float) -> li
         raise OllamaError(f"Ollama zwróciła błąd HTTP {response.status_code}: {response.text[:200]}")
 
     try:
-        content = response.json()["message"]["content"]
+        data = response.json()
+        content = data["message"]["content"]
     except (KeyError, ValueError) as error:
         raise OllamaError(f"Nieoczekiwana odpowiedź Ollamy: {error}") from error
-    return parse_entities(content)
+
+    entities = parse_entities(content)
+    # Fail-closed: odpowiedź ucięta przez limit tokenów, z której nic nie
+    # da się odczytać, to NIE jest „brak danych osobowych”. Tak wyglądał
+    # qwen3.5 z włączonym myśleniem: 600 tokenów rozważań, pusta treść.
+    if data.get("done_reason") == "length" and not entities:
+        raise OllamaError(
+            f"Model wyczerpał limit {MAX_OUTPUT_TOKENS} tokenów, nie zwracając encji "
+            "(model z trybem „thinking” albo zapętlenie)."
+        )
+    return entities
+
+
+# Końcówki fleksyjne polskich imion i nazwisk, najdłuższe najpierw.
+# „Wróblewskiego” -> „Wróblewsk”, „Grzegorza” -> „Grzegorz”, „Szczepańską”
+# -> „Szczepańsk”. Wcześniej odcinaliśmy zawsze 2 litery: z „Wróblewskiego”
+# zostawało „Wróblewskie”, które nie pasowało do „Grzegorz Wróblewski”
+# z pieczątki – nazwisko wyciekało (porównanie qwen3.5 na przyklady/1_*.pdf).
+PERSON_ENDINGS = sorted(
+    ["iego", "iemu", "ego", "emu", "owi", "ami", "ach", "ich", "ym", "im", "om", "em",
+     "ie", "ą", "ę", "ej", "a", "e", "i", "o", "u", "y"],
+    key=len, reverse=True,
+)
+
+
+def name_stem(word: str) -> str:
+    """Rdzeń słowa imienia/nazwiska bez końcówki fleksyjnej (min. 3 litery).
+
+    Słowa kończące się znakiem innym niż litera („lek.”, „dr.”, „med.”)
+    zostają w całości – inaczej wzorzec gubił kropkę i nie znajdował
+    „lek. med. Andrzej Kamiński” w tekście.
+    """
+    if not word[-1].isalpha():
+        return word
+    folded = word.casefold()
+    for ending in PERSON_ENDINGS:
+        if folded.endswith(ending) and len(word) - len(ending) >= 3:
+            return word[:-len(ending)]
+    # Brak znanej końcówki (mianownik „Grzegorz”, „Dudek”): jak wcześniej.
+    return word[:max(3, len(word) - 2)]
 
 
 def find_person_forms(text: str, name: str) -> list[str]:
@@ -315,10 +360,7 @@ def find_person_forms(text: str, name: str) -> list[str]:
     # Pojedyncze słowo (np. „Jan”) pasowałoby też do „Janusz” czy „Janina”,
     # dlatego dla niego akceptujemy tylko dokładne wystąpienie.
     if 2 <= len(words) <= 4:
-        parts = []
-        for word in words:
-            stem = word[:max(3, len(word) - 2)]
-            parts.append(re.escape(stem) + r"\w{0,5}")
+        parts = [re.escape(name_stem(word)) + r"\w{0,5}" for word in words]
         body = r"\s+".join(parts)
     else:
         body = re.escape(name)
@@ -326,9 +368,36 @@ def find_person_forms(text: str, name: str) -> list[str]:
     return list(dict.fromkeys(m.group(0) for m in pattern.finditer(text)))
 
 
-def apply_entities(text: str, entities: list[Entity], vault: Vault) -> tuple[str, list[dict]]:
-    """Deterministycznie podmienia encje z LLM-a na tokeny.
+# Waluta w kwocie – ten sam zestaw co w Regexie (bez importu cyklicznego).
+_CURRENCY_HINT = re.compile(
+    r"(?i)zł|zl\b|pln|eur|euro|€|usd|\$|gbp|£|chf|złot|tys|mln|mld")
 
+
+def is_plausible(tag: str, value: str) -> bool:
+    """Proste reguły sensu dla kategorii – odsiewają oczywiste pomyłki modelu.
+
+    Prawdziwe przypadki z qwen2.5:3b: „NIP”, „tel.”, „e-mail”, „netto”,
+    „30 dni”, „2024”, „09:12:44” jako KWOTA; „J44.1” i „§1” jako STANOWISKO.
+    Zamaskowanie ich nie powoduje wycieku, ale psuje tekst wysyłany do AI.
+    - KWOTA: musi mieć cyfrę i walutę (kwoty z walutą łapie zresztą Regex),
+    - OSOBA, STANOWISKO: bez cyfr.
+    Celowo NIE wymagamy wielkiej litery w nazwisku: w logach i e-mailach
+    bywa „customer: tomasz nowak” – lepiej zamaskować za dużo niż przepuścić.
+    """
+    has_digit = any(ch.isdigit() for ch in value)
+    if tag == "KWOTA":
+        return has_digit and bool(_CURRENCY_HINT.search(value))
+    if tag in ("OSOBA", "STANOWISKO"):
+        return not has_digit
+    return True
+
+
+def apply_entities(text: str, entities: list, vault: Vault,
+                   source: str = "llm") -> tuple[str, list[dict]]:
+    """Deterministycznie podmienia encje (z LLM-a albo NER) na tokeny.
+
+    entities: obiekty z polami .original i .tag (Entity, NerEntity).
+    source: co trafi do kolumny „źródło” w tabeli wykrytych encji.
     Zwraca (tekst_z_tokenami, lista_zastosowanych_encji).
     """
     folded_text = text.casefold()
@@ -340,10 +409,18 @@ def apply_entities(text: str, entities: list[Entity], vault: Vault) -> tuple[str
         # Model czasem zwraca nasze własne tokeny – pomijamy je.
         if "[" in original or "]" in original or BARE_TOKEN.fullmatch(original):
             continue
+        if not is_plausible(entity.tag, original):
+            continue
         if entity.tag == "OSOBA":
             # Każda odmieniona forma dostaje własny token, żeby
             # de-anonimizacja przywróciła tekst co do litery.
-            for form in find_person_forms(text, original):
+            forms = find_person_forms(text, original)
+            # Gdy dopasowanie form nic nie dało, a dokładny tekst jest
+            # w dokumencie – maskujemy go. Wcześniej taka osoba po cichu
+            # przepadała (i wyciekała).
+            if not forms and original.casefold() in folded_text:
+                forms = [original]
+            for form in forms:
                 candidates.setdefault(form, entity.tag)
         # Ochrona przed halucynacją: encja musi istnieć w tekście (bez
         # względu na wielkość liter – „LIVERI” i „Liveri” to ta sama nazwa).
@@ -368,7 +445,7 @@ def apply_entities(text: str, entities: list[Entity], vault: Vault) -> tuple[str
                 "token": token,
                 "kategoria": candidates[original],
                 "oryginał": original,
-                "źródło": "llm",
+                "źródło": source,
             })
     return text, applied
 
