@@ -25,6 +25,20 @@ streamlit run app.py --server.address localhost
 
 Bez działającej Ollamy aplikacja nadal działa: włącza się tryb samego Regexa i pokazuje ostrzeżenie.
 
+## 🔒 Zabezpieczenia
+
+- **Tylko localhost.** `.streamlit/config.toml` wymusza `server.address = "localhost"`, limit
+  pliku 25 MB i wyłącza telemetrię Streamlita. Adres Ollamy musi być lokalny (`localhost`,
+  `127.0.0.1`, `::1`) – inny adres jest odrzucany, zanim jakikolwiek tekst zostanie wysłany.
+- **Normalizacja Unicode** całego wejścia (NFKC + usunięcie znaków niewidocznych), więc PESEL
+  z zero-width space czy cyframi pełnej szerokości nie omija Regexa.
+- **Fail-closed.** Gdy etap LLM nie zadziała albo dokument zawiera polecenia dla modelu
+  (prompt injection, np. „zignoruj instrukcje”), tekst do wysłania jest ukryty, dopóki
+  użytkownik nie potwierdzi, że go sprawdził. Tekst trafia do modelu między znacznikami
+  `<<<TEKST>>>…<<<KONIEC>>>`, a prompt każe ignorować zawarte w nim polecenia.
+- Regex wykrywa też karty płatnicze (suma Luhna), klucze PEM, tokeny GitHub/Slack/Google/Stripe
+  i adresy IPv6.
+
 ## Pliki
 
 Tekst można wkleić, wybrać przypadek testowy albo wczytać plik: `.txt`, `.md`, `.csv`, `.log`, `.json`,

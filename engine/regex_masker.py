@@ -9,6 +9,7 @@ Dlaczego Regex przed LLM-em?
   np. numer zamówienia, który ma akurat 11 cyfr.
 """
 
+import ipaddress
 import re
 from dataclasses import dataclass
 from datetime import date
@@ -54,6 +55,31 @@ def is_valid_iban(value: str) -> bool:
     rearranged = compact[4:] + compact[:4]
     numeric = "".join(str(int(ch, 36)) for ch in rearranged)
     return int(numeric) % 97 == 1
+
+
+def is_valid_card(value: str) -> bool:
+    """Numer karty płatniczej: 13–19 cyfr i suma kontrolna Luhna."""
+    digits = re.sub(r"\D", "", value)
+    if not 13 <= len(digits) <= 19:
+        return False
+    total = 0
+    for position, char in enumerate(reversed(digits)):
+        number = int(char)
+        if position % 2:  # co druga cyfra od końca jest podwajana
+            number = number * 2 - 9 if number > 4 else number * 2
+        total += number
+    return total % 10 == 0
+
+
+def is_valid_ipv6(value: str) -> bool:
+    """Prawdziwy adres IPv6 (odrzuca godziny „10:41:07” i samo „::”)."""
+    if not re.search(r"[0-9A-Fa-f]", value):
+        return False
+    try:
+        ipaddress.IPv6Address(value)
+    except ValueError:
+        return False
+    return True
 
 
 def is_valid_regon(value: str) -> bool:
@@ -181,6 +207,21 @@ _MONTHS = (r"stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|"
 # potem krótkie ciągi cyfr, które łatwo pomylić (telefon na samym końcu).
 PATTERNS: list[PiiPattern] = [
     # --- Sekrety -----------------------------------------------------------
+    # Klucz prywatny PEM – cały blok, razem z liniami BEGIN/END. Pierwszy,
+    # bo jego treść (base64) pocięłyby inne wzorce i część klucza by wyciekła.
+    PiiPattern(
+        "SECRET",
+        re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?"
+                   r"-----END [A-Z0-9 ]*PRIVATE KEY-----"),
+    ),
+    # Tokeny GitHuba (ghp_, gho_, ghu_, ghs_, ghr_, github_pat_), Slacka
+    # (xoxb-, xoxp-…), Google API (AIza…) i Stripe (sk_live_, rk_test_…).
+    # Przed NIP-em i telefonem – inaczej cyfry w środku tokenu stawały się
+    # [NIP_1], a reszta sekretu wyciekała.
+    PiiPattern("SECRET", re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_\w{40,})")),
+    PiiPattern("SECRET", re.compile(r"\bxox[abposr]-[A-Za-z0-9-]{10,}")),
+    PiiPattern("SECRET", re.compile(r"\bAIza[0-9A-Za-z_-]{35}")),
+    PiiPattern("SECRET", re.compile(r"\b[sr]k_(?:live|test)_[A-Za-z0-9]{16,}")),
     # Tokeny JWT (eyJ... – zakodowany nagłówek {"alg":...}), klucze OpenAI
     # (sk-...) i AWS (AKIA...). Rozpoznawalne po samym kształcie.
     PiiPattern(
@@ -243,9 +284,19 @@ PATTERNS: list[PiiPattern] = [
     PiiPattern("REGON", re.compile(r"(?<!\d)\d{14}(?!\d)"), validator=is_valid_regon),
     # BDO (rejestr odpadowy) – 9 cyfr bez sumy kontrolnej, więc tylko po słowie BDO.
     PiiPattern("BDO", re.compile(r"\bBDO\b\W{0,6}(\d{9})(?!\d)"), value_group=1),
+    # Karta płatnicza: 13–19 cyfr (opcjonalnie w grupach), suma Luhna.
+    # (?![ -]?\d) – nie wolno uciąć dłuższego ciągu cyfr (np. rachunku).
+    # Po REGON-ie 14-cyfrowym, przed PESEL-em, NIP-em i telefonem.
+    PiiPattern(
+        "KARTA",
+        re.compile(r"(?<![\d-])[2-6]\d{3}(?:[ -]?\d){9,15}(?![ -]?\d)"),
+        validator=is_valid_card,
+    ),
     PiiPattern(
         "PESEL",
-        re.compile(r"(?<!\d)\d{11}(?!\d)"),
+        # Pojedyncze myślniki w środku też: „9203150-2349” (np. SOFT HYPHEN
+        # wstawiony, żeby ominąć wzorzec). O wyniku decyduje suma kontrolna.
+        re.compile(r"(?<![\d-])\d(?:-?\d){10}(?![\d-])"),
         validator=is_valid_pesel,
     ),
     PiiPattern(
@@ -293,6 +344,13 @@ PATTERNS: list[PiiPattern] = [
         "PASZPORT",
         re.compile(r"(?<![A-Za-z0-9])[A-Z]{2} ?\d{7}(?![A-Za-z0-9])"),
         validator=lambda v: is_valid_passport(v.replace(" ", "")),
+    ),
+    # IPv6 (pełny i skrócony zapis, np. 2001:db8::1). Kształt łapie też
+    # godziny („10:41:07”), dlatego decyduje walidator z modułu ipaddress.
+    PiiPattern(
+        "IP",
+        re.compile(r"(?<![\w:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?![\w:])"),
+        validator=is_valid_ipv6,
     ),
     PiiPattern(
         "IP",

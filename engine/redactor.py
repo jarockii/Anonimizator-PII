@@ -86,8 +86,11 @@ def text_to_pdf(text: str) -> bytes:
 
 def redact_text_to_pdf(text: str, values: list[str]) -> RedactionResult:
     """Tworzy PDF z tekstu, w którym dane wrażliwe są czarnymi paskami."""
+    # Ta sama normalizacja co w pipeline – inaczej wartość z sejfu
+    # („92031502349”) nie pasowałaby do tekstu z niewidoczną spacją i dane
+    # trafiłyby do PDF-a bez paska.
     # Znak nowej strony (z PDF) zamieniamy na zwykły koniec linii.
-    text = text.replace(PAGE_BREAK, "\n")
+    text = normalize_pdf_text(text).replace(PAGE_BREAK, "\n")
     unique_values = _clean_values(values)
     if not unique_values:
         return RedactionResult(text_to_pdf(text), 0)

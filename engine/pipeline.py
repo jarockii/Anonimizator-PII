@@ -11,7 +11,9 @@ from engine.llm_masker import (
     OllamaError,
     apply_entities,
     detect_entities,
+    find_injection_markers,
 )
+from engine.file_reader import normalize_text
 from engine.regex_masker import mask_with_regex
 from engine.vault import Vault
 
@@ -23,10 +25,17 @@ class AnonymizationResult:
     regex_ms: float = 0.0
     llm_ms: float = 0.0
     llm_error: str | None = None  # wypełnione, gdy LLM zawiódł (działa sam Regex)
+    # Powody, dla których wynik NIE jest gotowy do wysłania bez sprawdzenia
+    # (fail-closed): LLM nie działał albo dokument wygląda na prompt injection.
+    review_reasons: list[str] = field(default_factory=list)
 
     @property
     def total_ms(self) -> float:
         return self.regex_ms + self.llm_ms
+
+    @property
+    def needs_review(self) -> bool:
+        return bool(self.review_reasons)
 
 
 def anonymize(
@@ -38,6 +47,9 @@ def anonymize(
     on_progress: Callable[[int, int], None] | None = None,
 ) -> AnonymizationResult:
     """Uruchamia cały pipeline anonimizacji."""
+    # Etap 0: normalizacja Unicode (niewidoczne znaki, cyfry pełnej szerokości).
+    text = normalize_text(text)
+
     # Etap 1: Regex
     start = time.perf_counter()
     masked, found = mask_with_regex(text, vault)
@@ -57,7 +69,19 @@ def anonymize(
             result.masked_text = masked
         except OllamaError as error:
             result.llm_error = str(error)
+            result.review_reasons.append(
+                "Etap LLM nie zadziałał – imiona, nazwiska, firmy i adresy bez stałego "
+                f"formatu mogą być NIEZAMASKOWANE. Przyczyna: {error}"
+            )
         result.llm_ms = (time.perf_counter() - start) * 1000
+
+        markers = find_injection_markers(masked)
+        if markers:
+            result.review_reasons.append(
+                "Dokument zawiera polecenia skierowane do modelu (możliwy prompt "
+                "injection), więc model mógł celowo pominąć dane: "
+                + "; ".join(f"„{marker}”" for marker in markers[:5])
+            )
 
     # Etap 2b: globalna propagacja. Wszystko, co sejf już zna (z Regexa lub
     # LLM-a), maskujemy w CAŁYM dokumencie, bez względu na wielkość liter.

@@ -12,7 +12,14 @@ from engine.file_reader import (
     join_pages,
     read_uploaded_pages,
 )
-from engine.llm_masker import DEFAULT_MODEL, OLLAMA_URL, check_ollama, get_model_memory_mb
+from engine.llm_masker import (
+    DEFAULT_MODEL,
+    OLLAMA_URL,
+    OllamaAddressError,
+    check_ollama,
+    get_model_memory_mb,
+    validate_ollama_url,
+)
 from engine.pipeline import anonymize, get_process_peak_ram_mb
 from engine.redactor import page_count, redact_pdf, redact_text_to_pdf, render_preview
 from engine.vault import Vault, VaultTokenError
@@ -208,8 +215,15 @@ with st.sidebar:
     model = st.text_input("Model (≤ 4B parametrów)", value=DEFAULT_MODEL)
     use_llm = st.checkbox("Etap 2: wykrywanie kontekstowe (LLM)", value=True)
 
+    try:
+        validate_ollama_url(base_url)
+        address_error = None
+    except OllamaAddressError as error:
+        address_error = str(error)
     models = check_ollama(base_url)
-    if models is None:
+    if address_error:
+        st.error(f"{address_error}\n\nEtap LLM nie zostanie uruchomiony.")
+    elif models is None:
         st.error("Ollama nie odpowiada – działa tylko Regex.\n\nUruchom: `ollama serve`")
     elif model not in models:
         st.warning(f"Model nie jest pobrany. Uruchom:\n\n`ollama pull {model}`")
@@ -280,9 +294,6 @@ with tab_mask:
 
     result = st.session_state.get("last_result")
     if result:
-        if result.llm_error:
-            st.warning(f"Etap LLM pominięty: {result.llm_error}")
-
         m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric("Regex", f"{result.regex_ms:.1f} ms")
         m2.metric("LLM", f"{result.llm_ms / 1000:.2f} s" if use_llm else "wył.")
@@ -292,62 +303,78 @@ with tab_mask:
         model_ram = get_model_memory_mb(model, base_url)
         m5.metric("RAM modelu", f"{model_ram:.0f} MB" if model_ram else "—")
 
-        st.subheader("Tekst bezpieczny do wysłania do chmury")
-        # st.code daje przycisk „kopiuj” w prawym górnym rogu.
-        st.code(result.masked_text, language=None, wrap_lines=True)
-        st.download_button(
-            "💾 Pobierz zanonimizowany tekst (.txt)",
-            data=result.masked_text,
-            file_name="zanonimizowany.txt",
-            mime="text/plain",
-        )
-        with st.expander("🔑 Token sejfu – zapisz, żeby później odszyfrować odpowiedź"):
-            show_vault_token(vault, key="tab1")
+        # Fail-closed: gdy LLM nie zadziałał albo dokument wygląda na prompt
+        # injection, NIE pokazujemy tekstu „do wysłania” bez świadomej decyzji.
+        show_output = True
+        if result.needs_review:
+            st.error("⛔ Wynik wymaga sprawdzenia przed wysłaniem do chmury:\n\n"
+                     + "\n\n".join(f"- {reason}" for reason in result.review_reasons))
+            show_output = st.checkbox(
+                "Sprawdziłem tekst – pokaż wynik mimo to",
+                value=False,
+                key=f"review_ack_{id(result)}",
+            )
+        elif not use_llm:
+            st.warning("Etap LLM wyłączony: imiona, firmy i adresy bez stałego formatu "
+                       "nie są wykrywane. Przejrzyj tekst przed wysłaniem.")
 
-        redaction = st.session_state.get("redaction")
-        if redaction:
-            from_source = redaction["source_pdf"] is not None
-            st.subheader("⬛ Dokument z czarnymi paskami")
-            # Obrazy istnieją tylko w wgranym PDF – w PDF-ie z tekstu ich nie ma.
-            redact_images = st.checkbox(
-                "Zamazać również podpisy odręczne, pieczątki i obrazy",
-                value=True,
-                disabled=not from_source,
-                help="Wycina z PDF wszystkie osadzone obrazy (podpis, pieczęć, kod QR, "
-                     "logo) i zostawia w ich miejscu czarny prostokąt. Dotyczy wgranego PDF.",
-            )
-            redacted = make_redacted_pdf(
-                redaction["source_pdf"], redaction["text"], redaction["values"], redact_images
-            )
-            if from_source:
-                source_info = ("oryginalny PDF, strony spłaszczone do obrazu – "
-                               "w pliku nie ma tekstu, który dałoby się skopiować")
-                if redact_images:
-                    source_info += f" · usuniętych obrazów: {redacted.images}"
-            else:
-                source_info = ("PDF z tekstu – w miejscu danych są tylko paski, "
-                               "prawdziwe wartości nie trafiły do pliku")
-            st.caption(f"Pasków: {redacted.bars} · {source_info}.")
-            if from_source and redact_images and redacted.background_pages:
-                st.info(f"Stron będących skanem: {redacted.background_pages}. Obraz całej "
-                        "strony nie jest zamazywany (strona byłaby czarna). Paski na tekście "
-                        "działają dzięki warstwie OCR, ale podpis odręczny WEWNĄTRZ skanu "
-                        "nie jest osobnym obrazem i nie zostanie wykryty.")
+        if show_output:
+            st.subheader("Tekst bezpieczny do wysłania do chmury")
+            # st.code daje przycisk „kopiuj” w prawym górnym rogu.
+            st.code(result.masked_text, language=None, wrap_lines=True)
             st.download_button(
-                "⬛ Pobierz zaczerniony PDF",
-                data=redacted.pdf,
-                file_name=redaction["file_name"],
-                mime="application/pdf",
+                "💾 Pobierz zanonimizowany tekst (.txt)",
+                data=result.masked_text,
+                file_name="zanonimizowany.txt",
+                mime="text/plain",
             )
-            if redacted.missing:
-                st.warning("Nie znaleziono w PDF (sprawdź ręcznie): "
-                           + ", ".join(redacted.missing))
-            with st.expander("Podgląd zaczernionego dokumentu"):
-                pages = page_count(redacted.pdf)
-                page = 1
-                if pages > 1:
-                    page = st.number_input("Strona", min_value=1, max_value=pages, value=1)
-                st.image(render_preview(redacted.pdf, page - 1))
+            with st.expander("🔑 Token sejfu – zapisz, żeby później odszyfrować odpowiedź"):
+                show_vault_token(vault, key="tab1")
+
+            redaction = st.session_state.get("redaction")
+            if redaction:
+                from_source = redaction["source_pdf"] is not None
+                st.subheader("⬛ Dokument z czarnymi paskami")
+                # Obrazy istnieją tylko w wgranym PDF – w PDF-ie z tekstu ich nie ma.
+                redact_images = st.checkbox(
+                    "Zamazać również podpisy odręczne, pieczątki i obrazy",
+                    value=True,
+                    disabled=not from_source,
+                    help="Wycina z PDF wszystkie osadzone obrazy (podpis, pieczęć, kod QR, "
+                         "logo) i zostawia w ich miejscu czarny prostokąt. Dotyczy wgranego PDF.",
+                )
+                redacted = make_redacted_pdf(
+                    redaction["source_pdf"], redaction["text"], redaction["values"], redact_images
+                )
+                if from_source:
+                    source_info = ("oryginalny PDF, strony spłaszczone do obrazu – "
+                                   "w pliku nie ma tekstu, który dałoby się skopiować")
+                    if redact_images:
+                        source_info += f" · usuniętych obrazów: {redacted.images}"
+                else:
+                    source_info = ("PDF z tekstu – w miejscu danych są tylko paski, "
+                                   "prawdziwe wartości nie trafiły do pliku")
+                st.caption(f"Pasków: {redacted.bars} · {source_info}.")
+                if from_source and redact_images and redacted.background_pages:
+                    st.info(f"Stron będących skanem: {redacted.background_pages}. Obraz całej "
+                            "strony nie jest zamazywany (strona byłaby czarna). Paski na tekście "
+                            "działają dzięki warstwie OCR, ale podpis odręczny WEWNĄTRZ skanu "
+                            "nie jest osobnym obrazem i nie zostanie wykryty.")
+                st.download_button(
+                    "⬛ Pobierz zaczerniony PDF",
+                    data=redacted.pdf,
+                    file_name=redaction["file_name"],
+                    mime="application/pdf",
+                )
+                if redacted.missing:
+                    st.warning("Nie znaleziono w PDF (sprawdź ręcznie): "
+                               + ", ".join(redacted.missing))
+                with st.expander("Podgląd zaczernionego dokumentu"):
+                    pages = page_count(redacted.pdf)
+                    page = 1
+                    if pages > 1:
+                        page = st.number_input("Strona", min_value=1, max_value=pages, value=1)
+                    st.image(render_preview(redacted.pdf, page - 1))
 
         st.subheader("Wykryte encje")
         if result.entities:

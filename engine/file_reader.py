@@ -9,6 +9,7 @@ Wszystko dzieje się lokalnie, w pamięci. Plik nie jest nigdzie zapisywany.
 """
 
 import io
+import unicodedata
 from pathlib import Path
 
 TEXT_EXTENSIONS = {".txt", ".md", ".csv", ".log", ".json"}
@@ -50,9 +51,26 @@ HYPHEN_LOOKALIKES = {
 _HYPHEN_TABLE = str.maketrans(HYPHEN_LOOKALIKES)
 
 
-def normalize_pdf_text(text: str) -> str:
-    """Ujednolica „podróbki” myślnika i usuwa niewidoczne znaki."""
-    return text.translate(_HYPHEN_TABLE)
+def normalize_text(text: str) -> str:
+    """Ujednolica tekst, zanim zobaczy go Regex i model.
+
+    Bez tego dane można „przemycić” obok wzorców, np. PESEL z niewidoczną
+    spacją w środku („9203150\\u200b2349”) wygląda normalnie, ale regex
+    go nie widzi i dane trafiają do chmury.
+
+    1. Podróbki myślnika -> „-” (SOFT HYPHEN z PDF itd.).
+    2. NFKC: cyfry pełnej szerokości („９２０…”) -> zwykłe cyfry, twarda spacja
+       -> spacja, ligatury („ﬁ”) -> „fi”.
+    3. Usunięcie pozostałych znaków formatujących Unicode (kategoria Cf:
+       zero-width joiner, znaczniki kierunku tekstu itp.).
+    Znaki sterujące (nowa linia, tabulator, „\\f” = nowa strona) zostają.
+    """
+    text = unicodedata.normalize("NFKC", text.translate(_HYPHEN_TABLE))
+    return "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
+
+
+# Dawna nazwa – PDF używa tej samej, pełnej normalizacji.
+normalize_pdf_text = normalize_text
 
 
 def read_pdf_pages(data: bytes) -> list[str]:
