@@ -59,6 +59,14 @@ przebiegami – wynik LLM 3B nie jest w pełni powtarzalny. Model może też nad
 („Najemcy”). Weryfikacja kategorii NER przez LLM jest dostępna jako opcja eksperymentalna (domyślnie wyłączona:
 qwen2.5:3b częściej psuł kategorie, niż je poprawiał).
 
+**Zostaw jawnie (per kategoria).** W pasku bocznym można świadomie nie maskować wybranych kategorii,
+np. **diagnoz** – żeby AI mogło streścić dokumentację medyczną. Dostępne są tylko kategorie, które same
+nie wskazują człowieka: ZDROWIE, STANOWISKO, KWOTA, DATA, FIRMA. Osoby, PESEL-e, adresy, sekrety,
+identyfikatory pośrednie i pozostałe dane szczególne (wyznanie, związki zawodowe…) są maskowane zawsze.
+Dane o zdrowiu są wydzielone z WRAZLIWE słownikiem (nie przez LLM): fragment mieszany („katolik po zawale”)
+albo bez medycznego słowa zostaje WRAZLIWE i jest zamaskowany. Zostawione dane nie dostają też paska w PDF,
+a aplikacja wypisuje je w osobnej tabeli.
+
 **Limit parametrów:** qwen2.5:3b (3,09 mld) + GLiNER2-PII (0,31 mld) = **3,39 mld ≤ 4 mld**. Pasek boczny
 pokazuje sumę i ostrzega, gdy model jest za duży (np. qwen3.5:4b ma 4,21 mld – sam przekracza limit).
 

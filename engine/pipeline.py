@@ -3,7 +3,7 @@
 import sys
 import time
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, Iterable
 
 from engine.llm_masker import (
     DEFAULT_MODEL,
@@ -21,6 +21,13 @@ from engine.regex_masker import mask_with_regex
 from engine.vault import Vault
 
 
+# Kategorie, które można świadomie zostawić jawnie. Celowo BEZ identyfikatorów
+# (OSOBA, PESEL, ADRES, POSREDNI…), sekretów i pozostałych danych szczególnych
+# (WRAZLIWE: wyznanie, związki zawodowe…) – ich odsłonięcie przekreśla sens
+# anonimizacji. Diagnoza bez nazwiska i PESEL-u nie wskazuje człowieka.
+KEEPABLE_CATEGORIES = {"ZDROWIE", "STANOWISKO", "KWOTA", "DATA", "FIRMA"}
+
+
 @dataclass
 class AnonymizationResult:
     masked_text: str
@@ -35,6 +42,8 @@ class AnonymizationResult:
     # Powody, dla których wynik NIE jest gotowy do wysłania bez sprawdzenia
     # (fail-closed): LLM nie działał albo dokument wygląda na prompt injection.
     review_reasons: list[str] = field(default_factory=list)
+    # Wykryte, ale zostawione jawnie na życzenie użytkownika (keep_categories).
+    kept_entities: list[dict] = field(default_factory=list)
 
     @property
     def total_ms(self) -> float:
@@ -54,8 +63,15 @@ def anonymize(
     on_progress: Callable[[int, int], None] | None = None,
     use_ner: bool = False,
     verify_ner: bool = False,
+    keep_categories: Iterable[str] = (),
 ) -> AnonymizationResult:
-    """Uruchamia cały pipeline anonimizacji."""
+    """Uruchamia cały pipeline anonimizacji.
+
+    keep_categories: kategorie zostawiane jawnie (tylko z KEEPABLE_CATEGORIES).
+    """
+    keep = set(keep_categories)
+    if not keep <= KEEPABLE_CATEGORIES:
+        raise ValueError(f"Tych kategorii nie można zostawić jawnie: {sorted(keep - KEEPABLE_CATEGORIES)}")
     # Etap 0: normalizacja Unicode (niewidoczne znaki, cyfry pełnej szerokości).
     text = normalize_text(text)
 
@@ -149,11 +165,18 @@ def anonymize(
     result.masked_text, surname_found = vault.mask_surnames(result.masked_text)
     found.extend(surname_found)
 
+    # Etap 3: kategorie, które użytkownik ŚWIADOMIE zostawia jawnie (np. diagnozy,
+    # żeby AI mogło streścić dokumentację medyczną). Wykrywamy je normalnie,
+    # a dopiero na końcu przywracamy – dzięki temu tabela pokazuje, co zostało
+    # odsłonięte, a czarne paski w PDF ich nie zakrywają.
+    result.masked_text, kept_tokens = vault.restore_categories(result.masked_text, keep)
+
     # Ta sama wartość mogła wystąpić kilka razy – w tabeli pokazujemy raz.
     unique: dict[str, dict] = {}
     for item in found:
         unique.setdefault(item["token"], item)
-    result.entities = list(unique.values())
+    result.kept_entities = [e for e in unique.values() if e["token"] in kept_tokens]
+    result.entities = [e for e in unique.values() if e["token"] not in kept_tokens]
     return result
 
 

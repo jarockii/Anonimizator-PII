@@ -33,7 +33,10 @@ DEFAULT_MODEL = "qwen2.5:3b"
 # tylko jedną z tych kategorii.
 # WRAZLIWE i POSREDNI to zadania, których NER (ani Regex) nie wykona –
 # wymagają rozumienia sensu zdania. To główna rola LLM w pipeline.
-Category = Literal["OSOBA", "FIRMA", "ADRES", "KWOTA", "STANOWISKO", "WRAZLIWE", "POSREDNI"]
+# ZDROWIE to podzbiór danych szczególnych wydzielony po to, żeby dało się go
+# świadomie zostawić jawnie (diagnozy w dokumentacji medycznej).
+Category = Literal["OSOBA", "FIRMA", "ADRES", "KWOTA", "STANOWISKO", "WRAZLIWE", "POSREDNI",
+                   "ZDROWIE"]
 CATEGORY_NAMES = Category.__args__
 
 # --- Bezpieczniki przeciw „zapętleniu” modelu ---------------------------------
@@ -242,6 +245,11 @@ def detect_entities(
         entities.extend(_detect_in_chunk(chunk, model, base_url, timeout))
         if on_progress:
             on_progress(number, len(chunks))
+    # Dane szczególne z głównego przejścia: o ZDROWIE vs WRAZLIWE decyduje
+    # słownik (tak samo jak w detect_sensitive), nie model.
+    for entity in entities:
+        if entity.tag in ("WRAZLIWE", "ZDROWIE"):
+            entity.tag = sensitive_category(entity.original)
     return entities
 
 
@@ -349,16 +357,24 @@ def _detect_in_chunk(text: str, model: str, base_url: str, timeout: float) -> li
 # 2) dla nich osobne, krótkie zapytanie „znajdź dane szczególne o ludziach”.
 # Słownik nie maskuje niczego sam – decyduje LLM (np. „lek. med.” to tytuł,
 # „szpital zatrudnia 300 osób” to nie informacja o konkretnej osobie).
-SENSITIVE_HINTS = re.compile(
-    r"(?i)\b(?:"
-    # zdrowie
+# Zdrowie osobno: te fragmenty dostają kategorię ZDROWIE, którą użytkownik może
+# świadomie zostawić jawnie (np. żeby AI streściło dokumentację medyczną).
+_HEALTH_HINTS = (
     r"chor[oóuya]\w*|lecz\w*|szpital\w*|onkolog\w*|chemi\w*|nowotw\w*|raka?\b|guz\w*|cukrzyc\w*"
     r"|depres\w*|psychiatr\w*|psycholog\w*|terapi\w*|diagnoz\w*|operacj\w*|ciąż\w*|poron\w*"
     r"|hiv|aids|niepełnospraw\w*|uzależ\w*|alkohol\w*|narkot\w*|odwyk\w*|schizofren\w*|autyz\w*"
     r"|padaczk\w*|zawał\w*|udar\w*|demencj\w*|alzheimer\w*|rehabilit\w*|zwolnieni\w* lekarsk\w*"
     r"|krwi\b|transfuzj\w*|leków|leki\b"
+    # słownictwo diagnoz („migotanie przedsionków”, „niewydolność serca”, kod ICD-10)
+    r"|zapaleni\w*|migotani\w*|niewydol\w*|nadciśnieni\w*|astm\w*|pochp|przewlekł\w*|złamani\w*"
+    r"|uraz\w*|infekc\w*|zakażeni\w*|gryp\w*|covid\w*|alergi\w*|objaw\w*|rozpoznani\w*|zaburzeni\w*"
+    r"|migren\w*|stwardnieni\w*|nerwic\w*|anoreksj\w*|bulimi\w*|otyłoś\w*|serc[aeu]?\b|płuc\w*"
+    r"|nerk\w*|wątrob\w*|kardio\w*|neurolog\w*|ortoped\w*|ginekolog\w*|pediatr\w*|przedsionk\w*"
+    r"|[A-TV-Z]\d\d\.\d\b"
+)
+_OTHER_SENSITIVE_HINTS = (
     # wyznanie
-    r"|wyznani\w*|religi\w*|katoli\w*|prawosław\w*|ewangeli\w*|protestan\w*|muzułm\w*|islam\w*"
+    r"wyznani\w*|religi\w*|katoli\w*|prawosław\w*|ewangeli\w*|protestan\w*|muzułm\w*|islam\w*"
     r"|żydow\w*|judai\w*|jehow\w*|buddy\w*|ateist\w*|parafi\w*|meczet\w*|synagog\w*"
     # związki zawodowe, polityka
     r"|związk\w* zawodow\w*|nszz|solidarnoś\w*|opzz|komisji zakładow\w*|parti[ia]\w*|poglądy\w*"
@@ -366,8 +382,23 @@ SENSITIVE_HINTS = re.compile(
     r"|orientac\w*|homoseks\w*|geje?\b|lesbij\w*|biseks\w*|transpłc\w*|lgbt\w*"
     r"|pochodzen\w*|romsk\w*|narodowoś\w*|karan\w*|wyrok\w*|skazan\w*|więzien\w*|areszt\w*"
     r"|genetyczn\w*|dna\b|biometr\w*"
-    r")"
 )
+SENSITIVE_HINTS = re.compile(rf"(?i)\b(?:{_HEALTH_HINTS}|{_OTHER_SENSITIVE_HINTS})")
+HEALTH_HINTS = re.compile(rf"(?i)\b(?:{_HEALTH_HINTS})")
+OTHER_SENSITIVE_HINTS = re.compile(rf"(?i)\b(?:{_OTHER_SENSITIVE_HINTS})")
+
+
+def sensitive_category(fragment: str) -> str:
+    """ZDROWIE tylko dla fragmentów jednoznacznie o zdrowiu; resztę – i każdy
+    fragment mieszany („katolik po zawale”) albo bez podpowiedzi – oznaczamy
+    WRAZLIWE. Przy wątpliwości wygrywa kategoria, której nie da się „odsłonić”.
+
+    Decyduje słownik, nie LLM: przypisanie kategorii przez model 3B okazało
+    się zawodne (weryfikacja kategorii NER), a tu pomyłka odsłoniłaby dane.
+    """
+    if HEALTH_HINTS.search(fragment) and not OTHER_SENSITIVE_HINTS.search(fragment):
+        return "ZDROWIE"
+    return "WRAZLIWE"
 
 
 class SensitiveList(BaseModel):
@@ -403,7 +434,7 @@ def detect_sensitive(text: str, model: str = DEFAULT_MODEL, base_url: str = OLLA
             fragments = SensitiveList.model_validate_json(data["message"]["content"]).fragments
         except ValidationError as error:
             raise OllamaError(f"Model zwrócił niepoprawną listę danych szczególnych: {error}") from error
-        entities.extend(Entity(original=f, tag="WRAZLIWE") for f in fragments if f.strip())
+        entities.extend(Entity(original=f, tag=sensitive_category(f)) for f in fragments if f.strip())
     return entities
 
 
@@ -571,7 +602,7 @@ def is_plausible(tag: str, value: str) -> bool:
         # „Data i adres IP” i „Urzędem Skarbowym w Toruniu” – bez słowa
         # o relacji/roli to nie jest opis człowieka.
         return len(value.split()) >= 2 and bool(_RELATION_HINT.search(value))
-    if tag == "WRAZLIWE":
+    if tag in ("WRAZLIWE", "ZDROWIE"):
         # Musi zawierać prawdziwe słowo (≥ 4 litery) – „od 2019 r.” to nie dane o zdrowiu.
         return bool(re.search(r"[^\W\d_]{4,}", value))
     return True

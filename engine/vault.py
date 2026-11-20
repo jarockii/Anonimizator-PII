@@ -177,6 +177,25 @@ class Vault:
                             "źródło": "propagacja"})
         return text, applied
 
+    def restore_categories(self, text: str, categories: set[str]) -> tuple[str, set[str]]:
+        """Przywraca jawny tekst TYLKO dla tokenów z podanych kategorii.
+
+        Służy do świadomego zostawienia np. diagnoz (ZDROWIE) w tekście dla AI.
+        Zwraca (tekst, zbiór przywróconych tokenów).
+        """
+        restored: set[str] = set()
+        if not categories:
+            return text, restored
+
+        def replace(match: re.Match) -> str:
+            token = f"[{match.group(1).upper()}]"
+            if token in self._token_to_value and _category_of(token) in categories:
+                restored.add(token)
+                return self._token_to_value[token]
+            return match.group(0)
+
+        return TOKEN_PATTERN.sub(replace, text), restored
+
     def restore(self, text: str) -> str:
         """Podmienia wszystkie znane tokeny w tekście na oryginalne dane.
 

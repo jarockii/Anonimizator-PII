@@ -22,14 +22,24 @@ from engine.llm_masker import (
     validate_ollama_url,
 )
 from engine.ner_masker import NER_PARAMS, ner_installed, preload_model as preload_ner_model
+from engine.ocr import clear_cache as clear_ocr_cache
+from engine.ocr import ocr_available, ocr_pdf
+from engine.pipeline import KEEPABLE_CATEGORIES, anonymize, get_process_peak_ram_mb
+from engine.redactor import page_count, redact_pdf, redact_text_to_pdf, render_preview
+from engine.vault import Vault, VaultTokenError
 
 # Limit hackathonu na liczbę parametrów modelu językowego.
 PARAM_LIMIT = 4_000_000_000
-from engine.ocr import clear_cache as clear_ocr_cache
-from engine.ocr import ocr_available, ocr_pdf
-from engine.pipeline import anonymize, get_process_peak_ram_mb
-from engine.redactor import page_count, redact_pdf, redact_text_to_pdf, render_preview
-from engine.vault import Vault, VaultTokenError
+
+# Kategorie, które można zostawić jawnie (pipeline.KEEPABLE_CATEGORIES).
+KEEP_OPTIONS = {
+    "ZDROWIE": "🩺 Diagnozy i leczenie (ZDROWIE)",
+    "STANOWISKO": "👔 Stanowiska",
+    "KWOTA": "💰 Kwoty",
+    "DATA": "📅 Daty",
+    "FIRMA": "🏢 Firmy i instytucje",
+}
+assert set(KEEP_OPTIONS) == KEEPABLE_CATEGORIES, "KEEP_OPTIONS musi odpowiadać KEEPABLE_CATEGORIES"
 
 st.set_page_config(page_title="Lokalny Anonimizator PII", page_icon="🛡️", layout="wide")
 
@@ -256,6 +266,17 @@ with st.sidebar:
         disabled=not (use_ner and use_llm),
         help="LLM sprawdza kategorie niepewnych wykryć NER (nigdy ich nie odznacza). "
              "Wyłączone domyślnie: qwen2.5:3b częściej psuł kategorie, niż je poprawiał.")
+
+    st.markdown("**Zostaw jawnie (nie maskuj):**")
+    # Tylko kategorie, które nie wskazują człowieka same z siebie. Osoby, PESEL-e,
+    # adresy, sekrety i pozostałe dane szczególne zawsze są maskowane.
+    keep_categories = [
+        category for category, label in KEEP_OPTIONS.items()
+        if st.checkbox(label, value=False, key=f"keep_{category}")
+    ]
+    if keep_categories:
+        st.caption("⚠️ Zaznaczone dane trafią do zewnętrznego AI jawnym tekstem. "
+                   "Osoby, PESEL-e i adresy nadal są maskowane.")
     if ocr_available():
         st.caption("🖼️ OCR obrazów w PDF: włączony (Tesseract)")
     else:
@@ -366,6 +387,7 @@ with tab_mask:
             st.session_state.last_result = anonymize(
                 text, vault, use_llm=use_llm, model=model, base_url=base_url,
                 on_progress=show_progress, use_ner=use_ner, verify_ner=verify_ner,
+                keep_categories=keep_categories,
             )
             progress.empty()
             st.session_state.last_result.review_reasons.extend(ocr_review_reasons())
@@ -464,6 +486,11 @@ with tab_mask:
             st.dataframe(result.entities, hide_index=True)
         else:
             st.write("Nie wykryto danych wrażliwych.")
+        if result.kept_entities:
+            st.subheader("Zostawione jawnie (na Twoje życzenie)")
+            st.caption("Wykryte, ale NIE zamaskowane i bez czarnego paska w PDF – "
+                       "zmień w pasku bocznym „Zostaw jawnie”.")
+            st.dataframe(result.kept_entities, hide_index=True)
 
 # --- Zakładka 2: de-anonimizacja ---------------------------------------------
 with tab_restore:

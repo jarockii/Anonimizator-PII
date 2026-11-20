@@ -156,7 +156,7 @@ def test_sensitive_pass_runs_only_on_hinted_chunks(monkeypatch):
     text = "Raport kwartalny bez danych.\f[OSOBA_1] od 2019 r. leczy się psychiatrycznie."
     result = anonymize(text, Vault())
     assert len(asked) == 1 and "psychiatrycznie" in asked[0]  # strona 1 nie poszła do LLM
-    assert "[WRAZLIWE_1]" in result.masked_text
+    assert "[ZDROWIE_1]" in result.masked_text  # leczenie = dane o zdrowiu
 
 
 def test_verification_error_keeps_ner_categories(fake_ner):
