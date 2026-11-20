@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Callable
 
+from engine.numerals import find_spelled_numbers
 from engine.vault import Vault
 
 # --- Walidatory sum kontrolnych -------------------------------------------
@@ -197,12 +198,24 @@ class PiiPattern:
 # Słowo kluczowe bez względu na wielkość liter (UL. na Karcie Podpisów),
 # potem 1–4 słowa nazwy i numer budynku z opcjonalnym numerem lokalu.
 _UPPER = "A-ZĄĆĘŁŃÓŚŹŻ"
+# Numer budynku z opcjonalnym lokalem: 15/3, 12A, „7 m. 4”, „5 lok. 2”.
+_BUILDING = r"\d+[A-Za-z]?(?:\s?/\s?\d+[A-Za-z]?|\s+(?:m\.|lok\.)\s?\d+[A-Za-z]?)?(?![\w/])"
 _STREET = (
-    r"(?<!\w)(?i:ul\.|ulica|al\.|aleja|pl\.|plac|os\.|osiedle)\s+"
+    # Słowo kluczowe także odmienione: „przy Placu Chrobrego”, „na ulicy”, „w alei”.
+    r"(?<!\w)(?i:ul\.|ulica|ulicy|ulicę|al\.|aleja|alei|aleję|pl\.|plac|placu|placem"
+    r"|os\.|osiedle|osiedlu|osiedla|rondo|ronda|rondzie)\s+"
     # „-\s+małe_litery” = wyraz przeniesiony do nowej linii („Niezna-\nnej”).
     rf"(?:[{_UPPER}0-9][\w.'-]*(?:-\s+[a-ząćęłńóśźż]+)?\s+){{1,4}}?"
-    r"\d+[A-Za-z]?(?:\s?/\s?\d+[A-Za-z]?)?(?![\w/])"
+    + _BUILDING
 )
+# Adres potoczny bez „ul.”: „mieszka na Długiej 5 m. 12”, „przy Polnej 7”.
+# Nazwa ulicy w miejscowniku przymiotnikowym (-ej) + numer: „na Stronie 5”
+# czy „przy Kasie 3” tego nie spełniają.
+_COLLOQUIAL_STREET = rf"(?<!\w)(?:na|przy)\s+([{_UPPER}][a-ząćęłńóśźż]+ej\s+{_BUILDING})"
+# Adres wiejski bez „ul.”: „Wola Zaręczycka 112, 37-415 Wola Zaręczycka”.
+# Wymagamy przecinka i kodu pocztowego po numerze – bez nich „Kodeks 157”
+# też wyglądałby jak adres.
+_VILLAGE = rf"(?<![\w/])(?:[{_UPPER}][\w-]*\s+){{1,3}}{_BUILDING},\s*"
 # Kod pocztowy z miastem: „80-244 Gdańsk”, „31-147 Kraków”, „00-514 WARSZAWA”.
 _POSTAL_CITY = (
     rf"(?<![\d-])\d{{2}}-\d{{3}}(?![\d-])\s+[{_UPPER}][\w]+"
@@ -211,6 +224,13 @@ _POSTAL_CITY = (
 
 _MONTHS = (r"stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|"
            r"września|października|listopada|grudnia")
+# Miesiące po angielsku – z wielkiej litery, żeby „may” (czasownik) nie był datą.
+_EN_MONTHS = (r"Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?"
+              r"|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?")
+
+# „Zamaskowane” @ i kropka w e-mailach: (at) [at] {at} (małpa) [małpa] ` at ` ` małpa `.
+_OBF_AT = r"(?:\((?:at|małpa)\)|\[(?:at|małpa)\]|\{at\}|\s(?:at|małpa)\s)"
+_OBF_DOT = r"(?:\.|\((?:dot|kropka)\)|\[(?:dot|kropka)\]|\s(?:dot|kropka)\s)"
 
 # KOLEJNOŚĆ MA ZNACZENIE: wzorce są stosowane po kolei, a już podmienione
 # fragmenty stają się tokenami, których kolejne wzorce nie dotkną.
@@ -263,6 +283,31 @@ PATTERNS: list[PiiPattern] = [
         "EMAIL",
         re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
     ),
+    # E-mail „zamaskowany” przez autora: jan.kowalski (at) wp kropka pl,
+    # jan[małpa]onet.pl, jan at firma dot com. Ludzie tak piszą na forach
+    # i w czatach – NER widzi tylko „jan.kowalski”, a domena zostaje.
+    PiiPattern("EMAIL", re.compile(
+        rf"(?i)(?<![\w.+-])[\w.+-]+\s*{_OBF_AT}\s*[\w-]+"
+        rf"(?:\s*{_OBF_DOT}\s*[\w-]+)*\s*{_OBF_DOT}\s*[a-z]{{2,}}\b"
+    )),
+    # Adres profilu z nazwiskiem w ścieżce: linkedin.com/in/jan-kowalski-0b12a.
+    # NER nie widzi w tym osoby, a to jednoznaczny identyfikator.
+    PiiPattern("PROFIL", re.compile(
+        r"(?i)\b(?:https?://)?(?:[a-z]{2,3}\.)?"
+        r"(?:linkedin\.com/(?:in|pub)|facebook\.com|fb\.com|instagram\.com|twitter\.com|x\.com"
+        r"|github\.com|gitlab\.com|tiktok\.com|youtube\.com|t\.me|goldenline\.pl)"
+        r"/@?[\w.%-]+(?:\?id=\d+)?/?"
+    )),
+    # Login po słowie kluczowym: skype: zbych.lukaszewicz, "username": "tnowak",
+    # login=jkowal. Maskujemy tylko wartość – słowo kluczowe zostaje (kontekst).
+    PiiPattern(
+        "LOGIN",
+        re.compile(
+            r"(?i)\b(?:skype|telegram|signal|discord|gg|teams|login|user(?:name)?|użytkownik)"
+            r"[\"']?\s*[:=]\s*[\"']?@?(?!\[)([\w.-]{3,})"
+        ),
+        value_group=1,
+    ),
     # --- Identyfikatory dokumentów i podpisów ------------------------------------
     # UUID, np. identyfikator dokumentu w Autenti. Przed datami i liczbami,
     # bo jego fragmenty („2025”, „1234”) mogłyby zostać pocięte innymi wzorcami.
@@ -278,6 +323,33 @@ PATTERNS: list[PiiPattern] = [
         # nie tylko co 4 – OCR skanu potrafi je przesunąć („1090 10147879”).
         re.compile(r"\b(?:PL ?)?\d{2}(?: ?\d){24}\b"),
         validator=_with_separators(is_valid_iban, 8),
+    ),
+    # Zagraniczny IBAN (DE89 3704 0044 0532 0130 00, GB…, FR…). Ta sama suma
+    # mod 97. Wcześniej NER oznaczał niemiecki IBAN jako… FIRMA.
+    PiiPattern(
+        "IBAN",
+        re.compile(r"\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,4})?\b"),
+        validator=is_valid_iban,
+    ),
+    # --- Nieruchomości i dokumenty po słowie kluczowym --------------------------------
+    # Księga wieczysta: kod sądu (4 znaki, 3. to cyfra) / 8 cyfr / cyfra kontrolna,
+    # np. SW1K/00054321/7. Format jest na tyle charakterystyczny, że nie wymagamy
+    # sumy kontrolnej – lepiej zamaskować KW z literówką niż ją przepuścić.
+    PiiPattern("KW", re.compile(r"\b[A-Z]{2}\d[A-Z]\s?/\s?\d{8}\s?/\s?\d\b")),
+    # Numer działki ewidencyjnej po słowie „działka” (345/7, 1024).
+    PiiPattern(
+        "DZIALKA",
+        re.compile(r"(?i)\bdziałk\w*\s+(?:gruntu\s+)?(?:ewidencyjn\w+\s+)?"
+                   r"(?:nr|numer|o\s+numerze)\.?\s*(\d+(?:/\d+)?)(?![\d/])"),
+        value_group=1,
+    ),
+    # Paszport po słowie kluczowym – dowolny kraj (ukraiński FE 482913 ma
+    # 6 cyfr i nie pasuje do wzorca polskiego). Spacja może być złamaniem linii.
+    PiiPattern(
+        "PASZPORT",
+        re.compile(r"(?i)\bpaszport\w*\s+(?:\w+\s+)?(?:nr\.?\s*|numer\s+|seria\s+i\s+numer\s+)?"
+                   r"(?-i:([A-Z]{1,3}\s?\d{5,9}))\b"),
+        value_group=1,
     ),
     # --- Rejestry firmowe --------------------------------------------------
     # KRS nie ma sumy kontrolnej, a 10 cyfr ma też NIP. Dlatego KRS łapiemy
@@ -336,6 +408,10 @@ PATTERNS: list[PiiPattern] = [
             r"|(?<![\d/])(?:0?[1-9]|[12]\d|3[01])/(?:0?[1-9]|1[0-2])/(?:19|20)\d{2}(?!\d)"
             r"|(?<![\d-])(?:19|20)\d{2}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])(?!\d)"
             rf"|(?<!\d)(?:0?[1-9]|[12]\d|3[01]) (?:{_MONTHS}) (?:19|20)\d{{2}}(?!\d)"
+            # Po angielsku: May 14th, 1961 / March 3, 2025 / 14 May 1961 / 3rd of Mar 2025
+            rf"|\b(?:{_EN_MONTHS})\.?\s+(?:0?[1-9]|[12]\d|3[01])(?:st|nd|rd|th)?,?\s+(?:19|20)\d{{2}}\b"
+            rf"|\b(?:0?[1-9]|[12]\d|3[01])(?:st|nd|rd|th)?\s+(?:of\s+)?(?:{_EN_MONTHS})\.?,?\s+"
+            rf"(?:19|20)\d{{2}}\b"
         ),
         validator=is_valid_date,
     ),
@@ -343,6 +419,9 @@ PATTERNS: list[PiiPattern] = [
     # Ulica z numerem (opcjonalnie z kodem i miastem) oraz sam kod z miastem.
     # Model 3B regularnie gubił adresy w umowach – a ich format jest stały.
     PiiPattern("ADRES", re.compile(rf"{_STREET}(?:,?\s+{_POSTAL_CITY})?")),
+    PiiPattern("ADRES", re.compile(rf"{_VILLAGE}{_POSTAL_CITY}")),
+    # „na Długiej 5 m. 12” – maskujemy samą nazwę z numerem, „na” zostaje.
+    PiiPattern("ADRES", re.compile(_COLLOQUIAL_STREET), value_group=1),
     PiiPattern("ADRES", re.compile(_POSTAL_CITY)),
     # Kwoty PRZED telefonem: inaczej „150 000 000 zł” wyglądałoby
     # dla regexa telefonu jak numer 150-000-000.
@@ -419,9 +498,28 @@ def _make_replacer(pattern: PiiPattern, vault: Vault, found: list[dict]):
     return replace
 
 
+def mask_spelled_numbers(text: str, vault: Vault, found: list[dict]) -> str:
+    """Telefony, kwoty, PESEL-e i daty zapisane SŁOWNIE (engine/numerals.py).
+
+    W sejfie ląduje oryginalny zapis słowny, więc de-anonimizacja przywraca
+    dokładnie te same słowa.
+    """
+    pieces, position = [], 0
+    for item in find_spelled_numbers(text):
+        value = text[item.start:item.end]
+        token = vault.tokenize(item.category, value)
+        found.append({"token": token, "kategoria": item.category,
+                      "oryginał": value, "źródło": "regex"})
+        pieces += [text[position:item.start], token]
+        position = item.end
+    pieces.append(text[position:])
+    return "".join(pieces)
+
+
 def mask_with_regex(text: str, vault: Vault) -> tuple[str, list[dict]]:
     """Maskuje dane o stałym formacie. Zwraca (tekst_z_tokenami, wykryte)."""
     found: list[dict] = []
     for pattern in PATTERNS:
         text = pattern.regex.sub(_make_replacer(pattern, vault, found), text)
+    text = mask_spelled_numbers(text, vault, found)
     return text, found
