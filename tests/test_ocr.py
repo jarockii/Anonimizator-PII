@@ -183,6 +183,51 @@ def test_ocr_words_get_black_bars():
     assert darkness(result.pdf, label) < 0.5
 
 
+# --- Numery rozbite przez OCR (spacja w środku) -----------------------------------------
+
+
+@pytest.mark.parametrize("text, category", [
+    ("PESEL 561 10446533", "PESEL"),          # prawdziwy błąd OCR z przyklady/2_*.pdf
+    ("PESEL 9203 1502349", "PESEL"),
+    ("NIP 526 025 02 74", "NIP"),
+    ("NIP 5260 250274", "NIP"),
+    ("rachunek PL61 1090 10140000 0712 1981 2874", "IBAN"),
+])
+def test_numbers_split_by_ocr_are_masked(text, category):
+    from engine.regex_masker import mask_with_regex
+    from engine.vault import Vault
+    masked, found = mask_with_regex(text, Vault())
+    assert f"[{category}_1]" in masked
+    assert not any(ch.isdigit() for ch in masked.split("[")[0] + masked.split("]")[-1])
+
+
+@pytest.mark.parametrize("text", [
+    "tel. +48 601 234 567",           # 11 cyfr z 3 separatorami – nie PESEL
+    "tel. 600 100 200, 12 lat",       # osobne liczby
+    "faktury 1 2 3 4 5 6 7 8 9 0 1",  # za dużo separatorów
+    "kod 4405 1401 358",              # zła suma kontrolna
+])
+def test_separate_numbers_are_not_glued_into_pesel_or_nip(text):
+    from engine.regex_masker import mask_with_regex
+    from engine.vault import Vault
+    masked, _ = mask_with_regex(text, Vault())
+    assert "[PESEL_" not in masked and "[NIP_" not in masked
+
+
+def test_split_pesel_from_ocr_gets_bars(monkeypatch):
+    words = [(0.05, 0.2, 0.25, 0.6, "PESEL", 0, 0), (0.30, 0.2, 0.45, 0.6, "561", 0, 0),
+             (0.47, 0.2, 0.90, 0.6, "10446533", 0, 0)]
+    monkeypatch.setattr(ocr, "run_tesseract", lambda pixmap: words)
+    from engine.file_reader import join_pages
+    from engine.pipeline import anonymize
+    from engine.vault import Vault
+    pdf = make_pdf([{"image": pymupdf.Rect(0, 0, 595, 842)}])
+    result = anonymize(join_pages(read_pdf_pages(pdf)), Vault(), use_llm=False)
+    assert result.masked_text == "PESEL [PESEL_1]"
+    redacted = redact_pdf(pdf, [e["oryginał"] for e in result.entities], redact_images=False)
+    assert redacted.missing == [] and redacted.bars == 1
+
+
 # --- Prawdziwy Tesseract --------------------------------------------------------------
 
 

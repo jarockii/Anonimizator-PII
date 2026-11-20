@@ -57,6 +57,17 @@ def is_valid_iban(value: str) -> bool:
     return int(numeric) % 97 == 1
 
 
+def _with_separators(validator: Callable[[str], bool], max_separators: int):
+    """Walidator, który dopuszcza najwyżej max_separators spacji/myślników
+    w numerze (nie licząc spacji po prefiksie kraju „PL ”)."""
+
+    def check(value: str) -> bool:
+        number = re.sub(r"^PL ?", "", value)
+        return len(re.findall(r"[ -]", number)) <= max_separators and validator(value)
+
+    return check
+
+
 def is_valid_card(value: str) -> bool:
     """Numer karty płatniczej: 13–19 cyfr i suma kontrolna Luhna."""
     digits = re.sub(r"\D", "", value)
@@ -263,9 +274,10 @@ PATTERNS: list[PiiPattern] = [
     # --- Finanse ------------------------------------------------------------------
     PiiPattern(
         "IBAN",
-        # PL + 26 cyfr albo sam NRB (26 cyfr), z opcjonalnymi spacjami co 4.
-        re.compile(r"\b(?:PL ?)?\d{2}(?: ?\d{4}){6}\b"),
-        validator=is_valid_iban,
+        # PL + 26 cyfr albo sam NRB (26 cyfr). Spacje w dowolnych miejscach,
+        # nie tylko co 4 – OCR skanu potrafi je przesunąć („1090 10147879”).
+        re.compile(r"\b(?:PL ?)?\d{2}(?: ?\d){24}\b"),
+        validator=_with_separators(is_valid_iban, 8),
     ),
     # --- Rejestry firmowe --------------------------------------------------
     # KRS nie ma sumy kontrolnej, a 10 cyfr ma też NIP. Dlatego KRS łapiemy
@@ -294,18 +306,19 @@ PATTERNS: list[PiiPattern] = [
     ),
     PiiPattern(
         "PESEL",
-        # Pojedyncze myślniki w środku też: „9203150-2349” (np. SOFT HYPHEN
-        # wstawiony, żeby ominąć wzorzec). O wyniku decyduje suma kontrolna.
-        re.compile(r"(?<![\d-])\d(?:-?\d){10}(?![\d-])"),
-        validator=is_valid_pesel,
+        # Pojedyncze myślniki lub spacje w środku też: „9203150-2349” (SOFT
+        # HYPHEN wstawiony, żeby ominąć wzorzec) albo „561 10446533” (OCR
+        # skanu wstawił spację). O wyniku decyduje suma kontrolna, a limit
+        # separatorów nie pozwala skleić kilku osobnych liczb w jeden PESEL.
+        re.compile(r"(?<![\d-])\d(?:[ -]?\d){10}(?![\d-])"),
+        validator=_with_separators(is_valid_pesel, 2),
     ),
     PiiPattern(
         "NIP",
-        re.compile(
-            r"(?<!\d)(?:PL ?)?"
-            r"(?:\d{3}-\d{3}-\d{2}-\d{2}|\d{3}-\d{2}-\d{2}-\d{3}|\d{10})(?!\d)"
-        ),
-        validator=is_valid_nip,
+        # 526-025-02-74, 526-02-50-274, 5260250274, „526 025 02 74” i to samo
+        # z przesuniętą przez OCR spacją. Najwyżej 3 separatory.
+        re.compile(r"(?<![\d-])(?:PL ?)?\d(?:[ -]?\d){9}(?![\d-])"),
+        validator=_with_separators(is_valid_nip, 3),
     ),
     # --- Dokumenty tożsamości i pojazdy ---------------------------------------------
     # VIN: 17 znaków bez I, O, Q (żeby nie myliły się z 1 i 0).
