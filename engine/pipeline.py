@@ -11,7 +11,9 @@ from engine.llm_masker import (
     OllamaError,
     apply_entities,
     detect_entities,
+    detect_sensitive,
     find_injection_markers,
+    verify_ner_categories,
 )
 from engine import ner_masker
 from engine.file_reader import normalize_text
@@ -27,6 +29,8 @@ class AnonymizationResult:
     ner_ms: float = 0.0
     llm_ms: float = 0.0
     ner_error: str | None = None  # NER niedostępny (brak pakietu/modelu)
+    # Kategorie NER poprawione przez LLM: {fragment: nowa kategoria}.
+    ner_fixes: dict[str, str] = field(default_factory=dict)
     llm_error: str | None = None  # wypełnione, gdy LLM zawiódł (działa sam Regex)
     # Powody, dla których wynik NIE jest gotowy do wysłania bez sprawdzenia
     # (fail-closed): LLM nie działał albo dokument wygląda na prompt injection.
@@ -49,6 +53,7 @@ def anonymize(
     base_url: str = OLLAMA_URL,
     on_progress: Callable[[int, int], None] | None = None,
     use_ner: bool = False,
+    verify_ner: bool = False,
 ) -> AnonymizationResult:
     """Uruchamia cały pipeline anonimizacji."""
     # Etap 0: normalizacja Unicode (niewidoczne znaki, cyfry pełnej szerokości).
@@ -67,12 +72,33 @@ def anonymize(
         start = time.perf_counter()
         try:
             ner_entities = ner_masker.detect_entities(masked)
-            masked, ner_found = apply_entities(masked, ner_entities, vault, source="ner")
-            found.extend(ner_found)
-            result.masked_text = masked
         except ner_masker.NerUnavailableError as error:
             result.ner_error = str(error)
+            ner_entities = []
         result.ner_ms = (time.perf_counter() - start) * 1000
+
+        # Opcjonalnie (domyślnie wył.): LLM poprawia KATEGORIE niepewnych
+        # wykryć NER. Nigdy ich nie usuwa. qwen2.5:3b częściej psuł kategorie
+        # niż poprawiał, dlatego to eksperyment do sprawdzenia z innym modelem.
+        if use_llm and verify_ner and ner_entities:
+            start = time.perf_counter()
+            try:
+                fixes = verify_ner_categories(masked, ner_entities, model=model, base_url=base_url)
+            except OllamaError:
+                fixes = {}
+            for entity in ner_entities:
+                if entity.original in fixes:
+                    entity.tag = fixes[entity.original]
+            result.ner_fixes = fixes
+            result.llm_ms += (time.perf_counter() - start) * 1000
+
+        fixed = [e for e in ner_entities if e.original in result.ner_fixes]
+        masked, fixed_found = apply_entities(masked, fixed, vault, source="ner+llm")
+        masked, ner_found = apply_entities(
+            masked, [e for e in ner_entities if e.original not in result.ner_fixes], vault,
+            source="ner")
+        found.extend(fixed_found + ner_found)
+        result.masked_text = masked
         if result.ner_error and not use_llm:
             result.review_reasons.append(
                 "Ani NER, ani LLM nie sprawdziły tekstu – imiona, nazwiska i firmy mogą "
@@ -91,6 +117,11 @@ def anonymize(
             )
             masked, llm_found = apply_entities(masked, entities, vault)
             found.extend(llm_found)
+            # Osobne, wąskie przejście: dane szczególne (art. 9 RODO) – tylko
+            # we fragmentach, w których słownik coś podpowiada.
+            sensitive = detect_sensitive(masked, model=model, base_url=base_url)
+            masked, sensitive_found = apply_entities(masked, sensitive, vault)
+            found.extend(sensitive_found)
             result.masked_text = masked
         except OllamaError as error:
             result.llm_error = str(error)
@@ -98,7 +129,7 @@ def anonymize(
                 "Etap LLM nie zadziałał – imiona, nazwiska, firmy i adresy bez stałego "
                 f"formatu mogą być NIEZAMASKOWANE. Przyczyna: {error}"
             )
-        result.llm_ms = (time.perf_counter() - start) * 1000
+        result.llm_ms += (time.perf_counter() - start) * 1000
 
         markers = find_injection_markers(masked)
         if markers:
@@ -113,6 +144,10 @@ def anonymize(
     # Łapie np. nazwę firmy WIELKIMI LITERAMI na ostatniej stronie, którą
     # model przegapił, bo przetwarzał tę stronę osobno.
     result.masked_text = vault.mask_known(result.masked_text)
+    # Etap 2c: samo nazwisko osoby, którą już zamaskowano w pełnej formie
+    # („Nazwisko: PIOTROWSKI” na skanie dowodu obok „DAMIAN PIOTROWSKI”).
+    result.masked_text, surname_found = vault.mask_surnames(result.masked_text)
+    found.extend(surname_found)
 
     # Ta sama wartość mogła wystąpić kilka razy – w tabeli pokazujemy raz.
     unique: dict[str, dict] = {}

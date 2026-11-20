@@ -29,6 +29,11 @@ from engine.llm_masker import CHUNK_CHARS, split_into_chunks
 # środowiskową, np. na lokalny katalog z dotrenowanym modelem po polsku.
 NER_MODEL = os.environ.get("ANONIMIZATOR_NER_MODEL", "fastino/gliner2-privacy-filter-PII-multi")
 
+# Liczba parametrów GLiNER2-PII policzona z pliku model.safetensors (wszystkie
+# tensory). Na hackathonie limit to ≤ 4 mld – na wypadek, gdyby NER też liczono,
+# aplikacja pokazuje sumę LLM + NER.
+NER_PARAMS = 307_098_645
+
 # Etykieta modelu -> nasza kategoria tokenu. GLiNER2 przyjmuje dowolne
 # etykiety tekstowe; „person”, „address”, „username” są z listy, na której
 # model był trenowany, „company” to etykieta ogólna GLiNER2.

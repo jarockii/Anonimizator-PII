@@ -75,6 +75,98 @@ def test_pipeline_ner_runs_before_llm(fake_ner, monkeypatch):
     assert {e["źródło"] for e in result.entities} == {"regex", "ner", "llm"}
 
 
+def fake_fixes_reply(fixes: list[dict]):
+    import json as _json
+
+    class Reply:
+        status_code, ok, text = 200, True, ""
+
+        def json(self):
+            return {"message": {"content": _json.dumps({"fixes": fixes})}}
+    return Reply()
+
+
+def test_llm_fixes_category_of_unsure_ner_entity(fake_ner, monkeypatch):
+    # Prawdziwy przypadek: NER oznaczył inicjały „M.Z.” jako FIRMA.
+    fake_ner({"company": [{"text": "M.Z.", "confidence": 0.7}],
+              "person": [{"text": "Jan Kowalski", "confidence": 0.99}]})
+    sent = []
+
+    def fake_post(url, json, timeout):
+        sent.append(json["messages"][1]["content"])
+        return fake_fixes_reply([{"id": 1, "tag": "OSOBA"}])
+
+    monkeypatch.setattr(llm_masker.requests, "post", fake_post)
+    monkeypatch.setattr(llm_masker, "_detect_in_chunk", lambda *a, **k: [])
+    result = anonymize("Pracownik o inicjałach M.Z. i Jan Kowalski.", Vault(), use_ner=True,
+                       verify_ner=True)
+    # Na liście do sprawdzenia jest tylko niepewne „M.Z.” (pewne wykrycia nie idą do LLM).
+    assert '"M.Z." (teraz: FIRMA)' in sent[0] and '"Jan Kowalski" (teraz' not in sent[0]
+    assert result.ner_fixes == {"M.Z.": "OSOBA"}
+    assert result.masked_text == "Pracownik o inicjałach [OSOBA_1] i [OSOBA_2]."
+    assert {(e["oryginał"], e["źródło"]) for e in result.entities} == {
+        ("M.Z.", "ner+llm"), ("Jan Kowalski", "ner")}
+
+
+def test_llm_verification_never_unmasks(fake_ner, monkeypatch):
+    # Nawet gdy LLM „zgubi” pozycję albo poda bzdurny numer – wykrycie zostaje.
+    fake_ner({"person": [{"text": "Ewa Nowak", "confidence": 0.6}]})
+    monkeypatch.setattr(llm_masker.requests, "post",
+                        lambda *a, **k: fake_fixes_reply([{"id": 7, "tag": "INNE"}]))
+    monkeypatch.setattr(llm_masker, "_detect_in_chunk", lambda *a, **k: [])
+    result = anonymize("Podpis: Ewa Nowak", Vault(), use_ner=True, verify_ner=True)
+    assert result.masked_text == "Podpis: [OSOBA_1]"
+
+
+def test_verification_is_off_by_default(fake_ner, monkeypatch):
+    # qwen2.5:3b psuł kategorie częściej, niż je poprawiał (pomiar na przyklady/5–8).
+    fake_ner({"company": [{"text": "M.Z.", "confidence": 0.7}]})
+    from engine import pipeline
+    calls = []
+    # Podmieniamy funkcję tam, gdzie pipeline jej używa (import po nazwie).
+    monkeypatch.setattr(pipeline, "verify_ner_categories",
+                        lambda *a, **k: calls.append(1) or {})
+    monkeypatch.setattr(llm_masker, "_detect_in_chunk", lambda *a, **k: [])
+    anonymize("inicjały M.Z.", Vault(), use_ner=True)
+    assert calls == []
+    anonymize("inicjały M.Z.", Vault(), use_ner=True, verify_ner=True)
+    assert calls == [1]  # kontrola: z flagą funkcja JEST wywoływana
+
+
+def test_sensitive_pass_runs_only_on_hinted_chunks(monkeypatch):
+    import json as _json
+    asked = []
+
+    def fake_post(url, json, timeout):
+        user = json["messages"][1]["content"]
+        if "fragments" in _json.dumps(json["format"]):
+            asked.append(user)
+            content = {"fragments": ["leczy się psychiatrycznie"]}
+        else:
+            content = {"entities": []}
+
+        class Reply:
+            status_code, ok, text = 200, True, ""
+
+            def json(self):
+                return {"message": {"content": _json.dumps(content)}}
+        return Reply()
+
+    monkeypatch.setattr(llm_masker.requests, "post", fake_post)
+    text = "Raport kwartalny bez danych.\f[OSOBA_1] od 2019 r. leczy się psychiatrycznie."
+    result = anonymize(text, Vault())
+    assert len(asked) == 1 and "psychiatrycznie" in asked[0]  # strona 1 nie poszła do LLM
+    assert "[WRAZLIWE_1]" in result.masked_text
+
+
+def test_verification_error_keeps_ner_categories(fake_ner):
+    # Ollama zablokowana (conftest) – kategorie z NER zostają, tekst zamaskowany.
+    fake_ner({"company": [{"text": "M.Z.", "confidence": 0.7}]})
+    result = anonymize("inicjały M.Z.", Vault(), use_ner=True)
+    assert result.masked_text == "inicjały [FIRMA_1]"
+    assert result.needs_review  # bo etap LLM (wykrywanie) też nie zadziałał
+
+
 def test_ner_entity_outside_text_is_rejected(fake_ner):
     # NER wycina fragmenty z tekstu, ale i tak sprawdzamy (wspólny apply_entities).
     vault = Vault()
@@ -111,12 +203,38 @@ def test_person_with_title_is_masked_exactly():
     assert "Kamiński" not in masked
 
 
+def test_surname_alone_is_masked_after_full_name():
+    # Prawdziwy wyciek: „Nazwisko: PIOTROWSKI” na skanie dowodu (przyklady/4_*.pdf).
+    vault = Vault()
+    text = "DAMIAN PIOTROWSKI – pożyczkobiorca.\nNazwisko: PIOTROWSKI\nImiona: DAMIAN"
+    masked, _ = llm_masker.apply_entities(
+        text, [ner_masker.NerEntity("DAMIAN PIOTROWSKI", "OSOBA", 0.98)], vault, source="ner")
+    masked, applied = vault.mask_surnames(masked)
+    assert "PIOTROWSKI" not in masked
+    assert applied[0]["źródło"] == "propagacja"
+    assert vault.restore(masked) == text
+
+
+def test_surname_propagation_skips_short_and_lowercase():
+    vault = Vault()
+    vault.tokenize("OSOBA", "Wojciech Lis")         # „Lis” za krótkie – zostaje
+    vault.tokenize("OSOBA", "Anna Kowal")
+    masked, _ = vault.mask_surnames("Lis biegł. Pan Kowal i kowal z kuźni.")
+    assert masked == "Lis biegł. Pan [OSOBA_3] i kowal z kuźni."
+
+
 @pytest.mark.parametrize("tag, value, ok", [
     ("KWOTA", "NIP", False), ("KWOTA", "netto", False), ("KWOTA", "30 dni", False),
     ("KWOTA", "09:12:44", False), ("KWOTA", "2024", False), ("KWOTA", "1200 zł", True),
     ("KWOTA", "15 tys. EUR", True), ("STANOWISKO", "J44.1", False), ("STANOWISKO", "§1", False),
     ("STANOWISKO", "Prezes Zarządu", True), ("OSOBA", "561 10446533", False),
     ("OSOBA", "tomasz nowak", True),  # nazwisko małymi literami (log) NIE jest odrzucane
+    # Prawdziwe odpowiedzi qwen2.5:3b na przyklady/*.pdf:
+    ("POSREDNI", "syn burmistrza Kutna", True), ("POSREDNI", "kancelarii brata prezesa", True),
+    ("POSREDNI", "operator wózka widłowego nr 7", True), ("POSREDNI", "wózka", False),
+    ("POSREDNI", "Data i adres IP", False), ("POSREDNI", "Urzędem Skarbowym w Toruniu", False),
+    ("WRAZLIWE", "leczy się psychiatrycznie z powodu depresji", True),
+    ("WRAZLIWE", "od 2019 r.", False),
 ])
 def test_category_sanity_rules(tag, value, ok):
     assert llm_masker.is_plausible(tag, value) is ok

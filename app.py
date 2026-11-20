@@ -18,9 +18,13 @@ from engine.llm_masker import (
     OllamaAddressError,
     check_ollama,
     get_model_memory_mb,
+    get_model_params,
     validate_ollama_url,
 )
-from engine.ner_masker import ner_installed, preload_model as preload_ner_model
+from engine.ner_masker import NER_PARAMS, ner_installed, preload_model as preload_ner_model
+
+# Limit hackathonu na liczbę parametrów modelu językowego.
+PARAM_LIMIT = 4_000_000_000
 from engine.ocr import clear_cache as clear_ocr_cache
 from engine.ocr import ocr_available, ocr_pdf
 from engine.pipeline import anonymize, get_process_peak_ram_mb
@@ -247,6 +251,11 @@ with st.sidebar:
         # po starcie, a nie przy pierwszym kliknięciu „Anonimizuj”.
         preload_ner_model()
     use_llm = st.checkbox("Etap 2: wykrywanie kontekstowe (LLM)", value=True)
+    verify_ner = st.checkbox(
+        "Eksperymentalne: LLM poprawia kategorie NER", value=False,
+        disabled=not (use_ner and use_llm),
+        help="LLM sprawdza kategorie niepewnych wykryć NER (nigdy ich nie odznacza). "
+             "Wyłączone domyślnie: qwen2.5:3b częściej psuł kategorie, niż je poprawiał.")
     if ocr_available():
         st.caption("🖼️ OCR obrazów w PDF: włączony (Tesseract)")
     else:
@@ -266,6 +275,22 @@ with st.sidebar:
         st.warning(f"Model nie jest pobrany. Uruchom:\n\n`ollama pull {model}`")
     else:
         st.success(f"Ollama OK · {model}")
+
+    # Limit hackathonu: LLM ≤ 4 mld parametrów. Pokazujemy też sumę z NER,
+    # na wypadek gdyby jury liczyło wszystkie modele razem.
+    llm_params = get_model_params(model, base_url) if use_llm and not address_error else None
+    ner_params = NER_PARAMS if use_ner else 0
+    if llm_params:
+        total = llm_params + ner_params
+        line = (f"🧮 Parametry: LLM {llm_params / 1e9:.2f} mld"
+                + (f" + NER {ner_params / 1e9:.2f} mld = **{total / 1e9:.2f} mld**" if ner_params else "")
+                + f" (limit {PARAM_LIMIT / 1e9:.0f} mld)")
+        if llm_params > PARAM_LIMIT:
+            st.error(line + " – sam LLM przekracza limit!")
+        elif total > PARAM_LIMIT:
+            st.warning(line + " – razem z NER ponad limit.")
+        else:
+            st.caption(line)
 
     st.divider()
     # Rezerwujemy miejsce i wypełniamy je na końcu skryptu – wtedy licznik
@@ -340,7 +365,7 @@ with tab_mask:
 
             st.session_state.last_result = anonymize(
                 text, vault, use_llm=use_llm, model=model, base_url=base_url,
-                on_progress=show_progress, use_ner=use_ner,
+                on_progress=show_progress, use_ner=use_ner, verify_ner=verify_ner,
             )
             progress.empty()
             st.session_state.last_result.review_reasons.extend(ocr_review_reasons())

@@ -45,6 +45,23 @@ na CPU – dlatego zostaje float32; NER można wyłączyć w pasku bocznym.
 Model był trenowany na EN/FR/ES/DE/IT/PT/NL, po polsku działa zero-shot. Progi pewności per etykieta
 (`engine/ner_masker.py`) są dobrane pomiarem. Kolejny krok: dotrenowanie na polskich danych.
 
+## 🧩 Podział pracy: Regex, NER, LLM
+
+| Etap | Co robi | Przykłady |
+|---|---|---|
+| Regex (+ liczby słownie) | dane o stałym formacie, deterministycznie | PESEL, IBAN (też zagraniczny), księga wieczysta, działka, paszport po słowie „paszport”, daty po angielsku, e-mail „(at)… kropka”, profil LinkedIn, `skype:`/`login:`, „na Długiej 5 m. 12”, adres wiejski, **telefon/kwota/PESEL/data zapisane słownie** |
+| NER (GLiNER2, 0,31 mld) | osoby, firmy, adresy, loginy | „zbyszek kowal”, „Krzysiu”, „Grzegorzowi Brzęczyszczykiewiczowi” |
+| LLM (qwen2.5:3b) | to, co wymaga rozumienia sensu | **identyfikacja pośrednia** („syn burmistrza Kutna”, `[POSREDNI_n]`), **dane szczególne z art. 9 RODO** (zdrowie, wyznanie, związki zawodowe – osobne, wąskie zapytanie tylko dla fragmentów wskazanych przez słownik, `[WRAZLIWE_n]`), formy, których NER nie zna |
+
+Pomiar na `przyklady/1–8` (60 trudnych fragmentów w plikach 5–8): wycieki **16 → 3**, pliki 1–4 bez wycieków.
+Pozostałe przypadki wymagają wnioskowania („jedyna kobieta na tym stanowisku”) i zmieniają się między
+przebiegami – wynik LLM 3B nie jest w pełni powtarzalny. Model może też nadmiarowo zamaskować pojedyncze słowa
+(„Najemcy”). Weryfikacja kategorii NER przez LLM jest dostępna jako opcja eksperymentalna (domyślnie wyłączona:
+qwen2.5:3b częściej psuł kategorie, niż je poprawiał).
+
+**Limit parametrów:** qwen2.5:3b (3,09 mld) + GLiNER2-PII (0,31 mld) = **3,39 mld ≤ 4 mld**. Pasek boczny
+pokazuje sumę i ostrzega, gdy model jest za duży (np. qwen3.5:4b ma 4,21 mld – sam przekracza limit).
+
 ## 🔒 Zabezpieczenia
 
 - **Tylko localhost.** `.streamlit/config.toml` wymusza `server.address = "localhost"`, limit
@@ -179,7 +196,7 @@ zaczerniał każde „ul.” i „2009”. Na 6-stronicowym skanie było to 844 
 | Fragmenty po ~400 znaków | Na całym logu model 3B zwracał pustą listę. Te same linie podane w krótszych fragmentach wykrywa poprawnie. |
 | Dopasowanie odmiany osób | Model 3B „poprawia” odmianę („Piotr Wiśniewski” zamiast „Piotra Wiśniewskiego”). Python szuka rdzeni słów i maskuje tylko formy, które naprawdę są w tekście. Każda forma ma własny token, więc przywracanie jest dokładne co do litery. |
 | Bezpieczniki przeciw pętli | Model 3B przy `temperature 0` potrafi się zapętlić: na krótkim pliku wygenerował 8800 tokenów zamiast ~150, a po 3 minutach wynik przepadł. Teraz `maxItems: 20` w JSON Schema (grammar Ollamy sam zamyka listę), `num_predict: 600`, limit czasu 60 s na fragment. Z uciętej odpowiedzi ratujemy kompletne encje. |
-| `keep_alive: 30m`, `num_ctx: 2048` | Model nie jest zwalniany z pamięci między kliknięciami w demo. Mniejszy kontekst wystarcza i oszczędza ok. 300 MB RAM. |
+| `keep_alive: 30m`, `num_ctx: 3072` | Model nie jest zwalniany z pamięci między kliknięciami w demo. Kontekst mieści prompt z 3 przykładami (~800 tokenów), fragment i odpowiedź; domyślne 4096+ zużywałoby więcej RAM-u. |
 | Tokeny nietykalne | Podmiana przeskakuje istniejące tokeny. Wcześniej encja „TEL_1” zwrócona przez model psuła token na `[[ADRES_3]]`. |
 | Numeracja w Pythonie | Model podaje tylko kategorię, a `_1`, `_2` nadaje sejf. Ta sama wartość zawsze dostaje ten sam token. |
 | Tolerancyjne `restore` | Rozpoznaje `[ OSOBA_1 ]`, `\[OSOBA_1\]`, `[osoba_1]`, bo tak potrafi przerobić tokeny ChatGPT. Nieznane tokeny zostają i są zgłaszane. |
