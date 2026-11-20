@@ -44,7 +44,26 @@ Bez działającej Ollamy aplikacja nadal działa: włącza się tryb samego Rege
 Tekst można wkleić, wybrać przypadek testowy albo wczytać plik: `.txt`, `.md`, `.csv`, `.log`, `.json`,
 `.pdf`, `.docx` (także tabele w Wordzie). Pliki są czytane w pamięci i nigdzie nie zapisywane.
 Odpowiedź AI też można wczytać z pliku. Zanonimizowany i przywrócony tekst można pobrać jako `.txt`.
-Skany PDF (same obrazki) nie są obsługiwane – wymagałyby OCR.
+### 🖼️ OCR tylko na obrazach
+
+Skany, pieczątki i zdjęcia dokumentów w PDF są odczytywane przez OCR (Tesseract przez PyMuPDF,
+bez dodatkowych bibliotek Pythona). Żeby było szybko i oszczędnie, OCR ([engine/ocr.py](engine/ocr.py)):
+
+- działa **tylko na obrazach** osadzonych w PDF – strona bez obrazów nie trafia do OCR,
+  a renderowany jest wyłącznie prostokąt obrazu (300 dpi, skala szarości),
+- pomija obrazy za małe (ikony, kreski) i takie, które mają już warstwę tekstową (skan z OCR-em),
+- ten sam obraz (np. logo na każdej stronie) rozpoznaje **raz**, a wynik całego pliku zapamiętuje,
+  więc odczyt tekstu i zaczernianie nie liczą OCR dwa razy,
+- słowa z OCR mają współrzędne na stronie, więc dostają czarne paski jak zwykły tekst.
+
+Wymaga Tesseracta z modelami `pol` i `eng`
+(Windows: instalator UB Mannheim, macOS: `brew install tesseract tesseract-lang`,
+Linux: `apt install tesseract-ocr tesseract-ocr-pol`). PyMuPDF ma wbudowany silnik Tesseracta
+i potrzebuje tylko plików modeli, więc zamiast instalacji systemowej wystarczy wrzucić
+`pol.traineddata` i `eng.traineddata` (z [tesseract-ocr/tessdata](https://github.com/tesseract-ocr/tessdata))
+do katalogu `tessdata/` w projekcie – bez uprawnień administratora. Bez modeli aplikacja działa dalej,
+ale gdy PDF ma obrazy z możliwym tekstem, wynik jest wstrzymany do ręcznego sprawdzenia.
+Obrazy w plikach `.docx` nie są jeszcze rozpoznawane.
 
 PDF jest czytany **strona po stronie** (`page.get_text("text", sort=True)`), więc tabele, kolumny
 i pieczęcie z Karty Podpisów (np. Autenti) wychodzą w kolejności czytania. Rozwijana sekcja

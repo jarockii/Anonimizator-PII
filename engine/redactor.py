@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 import pymupdf
 
 from engine.file_reader import PAGE_BREAK, normalize_pdf_text
+from engine.ocr import OcrWord, ocr_pdf
 
 # O ile zmniejszamy pasek od góry. 0 = pełna wysokość linii: przy 10%
 # nad paskiem wystawały kreski z „Ś”, „Ź”, „Ż” pisanych WIELKIMI literami
@@ -132,7 +133,8 @@ def _normalize_word(word: str) -> str:
 class PageWord:
     key: str                # znormalizowane słowo
     rect: pymupdf.Rect      # położenie na stronie
-    line: tuple[int, int]   # (blok, linia) – do łączenia słów w jeden pasek
+    line: tuple             # (blok, linia) – do łączenia słów w jeden pasek;
+                            # słowa z OCR: („ocr”, nr obrazu, blok, linia)
 
 
 def page_words(page: pymupdf.Page) -> list[PageWord]:
@@ -142,6 +144,20 @@ def page_words(page: pymupdf.Page) -> list[PageWord]:
         key = _normalize_word(text)
         if key:
             words.append(PageWord(key, pymupdf.Rect(x0, y0, x1, y1), (block, line)))
+    return words
+
+
+def ocr_page_words(ocr_words: list[OcrWord]) -> list[PageWord]:
+    """Słowa rozpoznane na obrazach strony – w tym samym formacie co page_words.
+
+    Doklejamy je PO słowach warstwy tekstowej: wartość z obrazu (np. imię
+    na pieczątce) dostaje pasek tak samo jak wartość z tekstu.
+    """
+    words = []
+    for word in ocr_words:
+        key = _normalize_word(word.text)
+        if key:
+            words.append(PageWord(key, pymupdf.Rect(word.rect), ("ocr", *word.line)))
     return words
 
 
@@ -276,12 +292,17 @@ def redact_pdf(
     values: list[str],
     dpi: int = FLATTEN_DPI,
     redact_images: bool = True,
+    ocr: bool = True,
 ) -> RedactionResult:
     """Zaczernia wartości w istniejącym PDF i spłaszcza strony do obrazków.
 
     redact_images=True dodatkowo wycina wszystkie obrazy osadzone w PDF
     (podpisy odręczne, pieczątki, kody QR, zdjęcia dowodu).
+    ocr=True: paski także na słowach rozpoznanych na obrazach (skan bez
+    warstwy tekstowej, pieczątka). Wynik OCR jest brany z pamięci – ten sam
+    plik był już rozpoznany przy odczycie tekstu.
     """
+    ocr_words = ocr_pdf(pdf_bytes).words if ocr else []
     source = pymupdf.open(stream=pdf_bytes, filetype="pdf")
     output = pymupdf.open()
     unique_values = _clean_values(values)
@@ -297,6 +318,8 @@ def redact_pdf(
             images += remove_images(page)
 
         words = page_words(page)
+        if page.number < len(ocr_words):
+            words += ocr_page_words(ocr_words[page.number])
         page_bars: list[pymupdf.Rect] = []
         for value in unique_values:
             rects = find_value_rects(words, value)

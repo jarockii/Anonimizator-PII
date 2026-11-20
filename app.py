@@ -20,6 +20,8 @@ from engine.llm_masker import (
     get_model_memory_mb,
     validate_ollama_url,
 )
+from engine.ocr import clear_cache as clear_ocr_cache
+from engine.ocr import ocr_available, ocr_pdf
 from engine.pipeline import anonymize, get_process_peak_ram_mb
 from engine.redactor import page_count, redact_pdf, redact_text_to_pdf, render_preview
 from engine.vault import Vault, VaultTokenError
@@ -114,6 +116,7 @@ def load_test_case(name: str) -> None:
     # Tekst nie pochodzi już z wgranego PDF-a – czarne paski nałożymy
     # na PDF wygenerowany z tekstu.
     st.session_state.pop("source_pdf", None)
+    st.session_state.pop("ocr_report", None)
     st.session_state.raw_pages = {"name": name, "pages": TEST_CASES[name].split(PAGE_BREAK)}
 
 
@@ -141,8 +144,26 @@ def load_uploaded_file(uploader_key: str, target_key: str) -> None:
         # układu, logo, tabel), a nie w PDF-ie wygenerowanym z samego tekstu.
         if uploaded.name.lower().endswith(".pdf"):
             st.session_state.source_pdf = {"name": uploaded.name, "bytes": uploaded.getvalue()}
+            # Wynik OCR jest już w pamięci (read_uploaded_pages go policzył).
+            st.session_state.ocr_report = ocr_pdf(uploaded.getvalue())
         else:
             st.session_state.pop("source_pdf", None)
+            st.session_state.pop("ocr_report", None)
+
+
+def ocr_review_reasons() -> list[str]:
+    """Powody wstrzymania wyniku związane z OCR (obrazy, których nie odczytano)."""
+    report = st.session_state.get("ocr_report")
+    if report is None or "source_pdf" not in st.session_state:
+        return []
+    reasons = []
+    if report.pending:
+        reasons.append(f"PDF zawiera obrazy z możliwym tekstem ({report.pending}), a OCR "
+                       "jest niedostępny – dane na skanach i pieczątkach NIE zostały "
+                       "sprawdzone. Zainstaluj Tesseract z językiem polskim.")
+    if report.errors:
+        reasons.append("OCR nie odczytał części obrazów: " + "; ".join(report.errors[:3]))
+    return reasons
 
 
 @st.cache_data(show_spinner="Zaczerniam dane w PDF...", max_entries=8)
@@ -204,6 +225,7 @@ def reset_vault() -> None:
     st.session_state.pop("last_result", None)
     st.session_state.pop("restored", None)
     st.session_state.pop("redaction", None)
+    clear_ocr_cache()  # wyniki OCR zawierają dane wrażliwe
 
 
 vault = get_vault()
@@ -214,6 +236,10 @@ with st.sidebar:
     base_url = st.text_input("Adres Ollamy", value=OLLAMA_URL)
     model = st.text_input("Model (≤ 4B parametrów)", value=DEFAULT_MODEL)
     use_llm = st.checkbox("Etap 2: wykrywanie kontekstowe (LLM)", value=True)
+    if ocr_available():
+        st.caption("🖼️ OCR obrazów w PDF: włączony (Tesseract)")
+    else:
+        st.caption("🖼️ OCR obrazów w PDF: niedostępny – zainstaluj Tesseract (pol)")
 
     try:
         validate_ollama_url(base_url)
@@ -259,6 +285,22 @@ with tab_mask:
     )
     show_upload_error("input_file")
 
+    ocr_report = st.session_state.get("ocr_report")
+    if ocr_report and ocr_report.images_total:
+        parts = [f"obrazów w PDF: {ocr_report.images_total}",
+                 f"OCR: {ocr_report.images_ocr}"]
+        if ocr_report.images_reused:
+            parts.append(f"powtórzone (z pamięci): {ocr_report.images_reused}")
+        if ocr_report.skipped_text:
+            parts.append(f"mają już tekst: {ocr_report.skipped_text}")
+        if ocr_report.skipped_small:
+            parts.append(f"za małe: {ocr_report.skipped_small}")
+        st.caption("🖼️ " + " · ".join(parts) + f" · czas OCR: {ocr_report.ocr_ms / 1000:.1f} s")
+        if ocr_report.pending:
+            st.warning(f"{ocr_report.pending} obraz(ów) może zawierać tekst, ale OCR jest "
+                       "niedostępny (brak Tesseracta z językiem polskim). Dane na skanach "
+                       "i pieczątkach nie zostaną wykryte.")
+
     raw = st.session_state.get("raw_pages")
     if raw:
         pages = raw["pages"]
@@ -290,6 +332,7 @@ with tab_mask:
                 on_progress=show_progress,
             )
             progress.empty()
+            st.session_state.last_result.review_reasons.extend(ocr_review_reasons())
             build_redacted_pdf(text, st.session_state.last_result.entities)
 
     result = st.session_state.get("last_result")

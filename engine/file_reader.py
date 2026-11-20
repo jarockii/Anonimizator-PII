@@ -73,8 +73,13 @@ def normalize_text(text: str) -> str:
 normalize_pdf_text = normalize_text
 
 
-def read_pdf_pages(data: bytes) -> list[str]:
-    """Zwraca tekst PDF jako listę stron (jedna pozycja = jedna strona)."""
+def read_pdf_pages(data: bytes, ocr: bool = True) -> list[str]:
+    """Zwraca tekst PDF jako listę stron (jedna pozycja = jedna strona).
+
+    ocr=True: tekst rozpoznany na OBRAZACH strony (skan, pieczątka, zdjęcie
+    dokumentu) jest doklejany na końcu tej strony – patrz engine/ocr.py.
+    Strony bez obrazów nie są przepuszczane przez OCR.
+    """
     # PyMuPDF – ta sama biblioteka, która potem zaczernia dane w PDF.
     # Dzięki temu tekst, w którym szukamy encji, jest identyczny z tym,
     # który redaktor znajdzie na stronie.
@@ -90,9 +95,23 @@ def read_pdf_pages(data: bytes) -> list[str]:
                  for page in document]
     except (RuntimeError, ValueError) as error:
         raise FileReadError(f"Uszkodzony plik PDF: {error}") from error
+
+    if ocr:
+        from engine.ocr import ocr_pdf
+
+        report = ocr_pdf(data)
+        pages = [
+            "\n".join(part for part in (page, normalize_pdf_text(extra).strip()) if part)
+            for page, extra in zip(pages, report.texts)
+        ]
+        if not any(pages) and report.pending:
+            raise FileReadError(
+                "PDF to skan (same obrazy), a OCR jest niedostępny. Zainstaluj Tesseract "
+                "z językiem polskim, żeby odczytać tekst z obrazów."
+            )
     if not any(pages):
-        # PDF ze skanem to obrazki, nie tekst – potrzebny byłby OCR.
-        raise FileReadError("PDF nie zawiera tekstu (prawdopodobnie to skan).")
+        raise FileReadError("PDF nie zawiera tekstu – ani w warstwie tekstowej, "
+                            "ani na obrazach (pusty skan?).")
     return pages
 
 
