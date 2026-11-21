@@ -1,0 +1,355 @@
+{
+ "nazwa": "po",
+ "model": "modele/gliner-pl",
+ "dol": 0.2,
+ "gora": 0.5,
+ "prawdziwe": [
+  {
+   "dokument": "1_umowa_z_pieczatka_i_podpisami",
+   "dana": "Grzegorza / Wróblewskiego (prezes w dopełniaczu)",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "1_umowa_z_pieczatka_i_podpisami",
+   "dana": "Grzegorz / Wróblewski (nazwisko na pieczątce (OCR))",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "1_umowa_z_pieczatka_i_podpisami",
+   "dana": "Małgorzata / Szczepańska",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "1_umowa_z_pieczatka_i_podpisami",
+   "dana": "Bursztyn (firma (także WIELKIMI na pieczątce i w logo))",
+   "pewnosc": 0.9999604225158691,
+   "kategoria": "FIRMA"
+  },
+  {
+   "dokument": "2_skan_bez_warstwy_tekstowej",
+   "dana": "Henryk / Zawadzki",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "2_skan_bez_warstwy_tekstowej",
+   "dana": "Teresa / Zawadzka",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "2_skan_bez_warstwy_tekstowej",
+   "dana": "Andrzej / Kamiński (lekarz z tytułem „lek. med.”)",
+   "pewnosc": 0.9937728047370911,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "2_skan_bez_warstwy_tekstowej",
+   "dana": "Rogali (szpital nazwany imieniem osoby)",
+   "pewnosc": 0.935849130153656,
+   "kategoria": "FIRMA"
+  },
+  {
+   "dokument": "3_skan_z_warstwa_ocr",
+   "dana": "Wojciech / Lis",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "3_skan_z_warstwa_ocr",
+   "dana": "Agnieszce / Dudek",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "4_karta_podpisow_dowod_i_injection",
+   "dana": "KAROLINA / NOWICKA",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "4_karta_podpisow_dowod_i_injection",
+   "dana": "DAMIAN / PIOTROWSKI",
+   "pewnosc": 0.9999986886978149,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "gosia (imię małymi literami i nick „Gosia N.”)",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "Kasia",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "zbyszek",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "kowal (nazwisko-słowo)",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "wilk („panią wilk”)",
+   "pewnosc": 0.9999675750732422,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "mietek / żuraw",
+   "pewnosc": 0.9999998807907104,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "Bartka",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "Zuzię",
+   "pewnosc": 0.9999997615814209,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "Krzysiu (wołacz)",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "Krzysztof / Bąk",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "rysiek / sowa",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "dana": "M.Z. (inicjały)",
+   "pewnosc": 0.9991636276245117,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "dana": "Zima („p. Zima”)",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "dana": "Mróz („p. Mróz”)",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "dana": "Wróbel-Nowicka",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "7_akt_notarialny_odmiana",
+   "dana": "Bożeną",
+   "pewnosc": 0.9999998807907104,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "7_akt_notarialny_odmiana",
+   "dana": "Zając-Kołodziejczyk",
+   "pewnosc": 0.9999998807907104,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "7_akt_notarialny_odmiana",
+   "dana": "Brzęczyszczykiewicz",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "7_akt_notarialny_odmiana",
+   "dana": "Brzęczyszczykiewiczowi (celownik)",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "7_akt_notarialny_odmiana",
+   "dana": "Jana / Marianny (rodzice w dopełniaczu)",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "7_akt_notarialny_odmiana",
+   "dana": "Wasyla / Hanny (rodzice w dopełniaczu)",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "7_akt_notarialny_odmiana",
+   "dana": "Ołeksandr",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "7_akt_notarialny_odmiana",
+   "dana": "Szewczence (celownik)",
+   "pewnosc": 0.999998927116394,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "7_akt_notarialny_odmiana",
+   "dana": "Szewczenko",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "dana": "Teodor",
+   "pewnosc": 0.9999915361404419,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "dana": "Wiśniewski",
+   "pewnosc": 0.9999721050262451,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "dana": "Zbyszek (podpis)",
+   "pewnosc": 0.9999996423721313,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "dana": "Becker",
+   "pewnosc": 0.9999983310699463,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "dana": "Hannah",
+   "pewnosc": 0.9999983310699463,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "dana": "Ingrid",
+   "pewnosc": 0.9999840259552002,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "dana": "Schröder (nazwisko panieńskie „née”)",
+   "pewnosc": 0.42023998498916626,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "dana": "Lukas",
+   "pewnosc": 1.0,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "dana": "Ola (zdrobnienie w cudzysłowie)",
+   "pewnosc": 0.9999997615814209,
+   "kategoria": "OSOBA"
+  }
+ ],
+ "falszywe": [
+  {
+   "dokument": "2_skan_bez_warstwy_tekstowej",
+   "tekst": "PESEL",
+   "pewnosc": 0.9999790191650391
+  },
+  {
+   "dokument": "2_skan_bez_warstwy_tekstowej",
+   "tekst": "Poradni Pulmonologicznej",
+   "pewnosc": 0.3231002688407898
+  },
+  {
+   "dokument": "3_skan_z_warstwa_ocr",
+   "tekst": "PESEL",
+   "pewnosc": 0.9999932050704956
+  },
+  {
+   "dokument": "3_skan_z_warstwa_ocr",
+   "tekst": "Urzędem Skarbowym w Toruniu",
+   "pewnosc": 0.4796530604362488
+  },
+  {
+   "dokument": "3_skan_z_warstwa_ocr",
+   "tekst": "Toruń",
+   "pewnosc": 0.3965103328227997
+  },
+  {
+   "dokument": "4_karta_podpisow_dowod_i_injection",
+   "tekst": "RZECZPOSPOLITA POLSKA",
+   "pewnosc": 0.9999998807907104
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "tekst": "Wieliczka",
+   "pewnosc": 0.9999971389770508
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "tekst": "Wieliczki",
+   "pewnosc": 0.999419093132019
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "tekst": "biedronki",
+   "pewnosc": 0.08923979848623276
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "tekst": "UDT",
+   "pewnosc": 0.9999974966049194
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "tekst": "Mr. W.",
+   "pewnosc": 0.9998179078102112
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "tekst": "Lex Poznań",
+   "pewnosc": 1.0
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "tekst": "Oberärztin Kardiologie",
+   "pewnosc": 0.9707512259483337
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "tekst": "kancelaria",
+   "pewnosc": 0.26436033844947815
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "tekst": "wew. 204",
+   "pewnosc": 0.999984860420227
+  }
+ ]
+}

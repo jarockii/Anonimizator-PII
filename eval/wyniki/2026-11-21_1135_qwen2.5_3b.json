@@ -1,0 +1,337 @@
+{
+ "konfiguracja": "model=qwen2.5:3b · NER=tak · LLM=tak · przebiegi=3",
+ "dokumenty": [
+  {
+   "nazwa": "1_umowa_z_pieczatka_i_podpisami",
+   "opis": "Umowa najmu: tekst + pieczątka (OCR), podpisy, logo",
+   "danych": 18,
+   "wycieki_srednio": 0.0,
+   "wycieki": {},
+   "nadmiar": {
+    "NIP": 3,
+    "Najemcy": 3
+   },
+   "zostawione": [],
+   "czas_s": 12.4,
+   "do_sprawdzenia": 0,
+   "etapy": {
+    "Grzegorza / Wróblewskiego (prezes w dopełniaczu)": "N",
+    "Grzegorz / Wróblewski (nazwisko na pieczątce (OCR))": "N",
+    "Małgorzata / Szczepańska": "N",
+    "Bursztyn (firma (także WIELKIMI na pieczątce i w logo))": "N",
+    "Portowej 14": "R",
+    "Portowa 14 (adres na pieczątce (OCR))": "R",
+    "Lipowa 7/3": "R",
+    "Morskiej 112/4": "R",
+    "917-280-56-97": "R",
+    "316610136": "R",
+    "87062364800": "R",
+    "604 512 377": "R",
+    "m.szczepanska@pocztex-test.pl": "R",
+    "3 450,00": "R",
+    "6 900 zł": "R",
+    "PL10 1090": "R",
+    "03.02.2025": "R",
+    "31.01.2027": "R"
+   },
+   "brakujace_fragmenty": []
+  },
+  {
+   "nazwa": "2_skan_bez_warstwy_tekstowej",
+   "opis": "Karta szpitalna – sam skan, pełny OCR",
+   "danych": 12,
+   "wycieki_srednio": 0.0,
+   "wycieki": {},
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 6.1,
+   "do_sprawdzenia": 0,
+   "etapy": {
+    "Henryk / Zawadzki": "N",
+    "Teresa / Zawadzka": "N",
+    "Andrzej / Kamiński (lekarz z tytułem „lek. med.”)": "N",
+    "Rogali (szpital nazwany imieniem osoby)": "N",
+    "10446533 (OCR wstawił spację: „561 10446533”)": "R",
+    "Szczecińska 41/12": "R",
+    "842 17 66": "R",
+    "691 220 845": "R",
+    "186,40": "R",
+    "14.01.2025": "R",
+    "22.01.2025": "R",
+    "obturacyjnej (diagnoza)": "L"
+   },
+   "brakujace_fragmenty": [
+    "10446533"
+   ]
+  },
+  {
+   "nazwa": "3_skan_z_warstwa_ocr",
+   "opis": "Pełnomocnictwo – skan z warstwą OCR od skanera",
+   "danych": 8,
+   "wycieki_srednio": 0.0,
+   "wycieki": {},
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 7.2,
+   "do_sprawdzenia": 0,
+   "etapy": {
+    "Wojciech / Lis": "N",
+    "Agnieszce / Dudek": "N",
+    "79030802151": "R",
+    "90093035926": "R",
+    "Słonecznej 19": "R",
+    "w.lis@skrzynka-test.pl": "R",
+    "728 133 409": "R",
+    "05.03.2025": "R"
+   },
+   "brakujace_fragmenty": []
+  },
+  {
+   "nazwa": "4_karta_podpisow_dowod_i_injection",
+   "opis": "Karta Podpisów, skan dowodu, prompt injection w obrazie",
+   "danych": 13,
+   "wycieki_srednio": 0.0,
+   "wycieki": {},
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 3.5,
+   "do_sprawdzenia": 3,
+   "etapy": {
+    "KAROLINA / NOWICKA": "N",
+    "DAMIAN / PIOTROWSKI": "N",
+    "93071284956": "R",
+    "ABA 300000": "R",
+    "PL80 1090": "R",
+    "4111 1111": "R",
+    "83.21.114.7": "R",
+    "2a02:a311": "R",
+    "7f3c2a91": "R",
+    "25 000 zł": "R",
+    "12.07.1993": "R",
+    "19.04.2031": "R",
+    "2025-03-18": "R"
+   },
+   "brakujace_fragmenty": []
+  },
+  {
+   "nazwa": "5_czat_potoczny",
+   "opis": "Czat: imiona małymi literami, zdrobnienia, liczby słownie",
+   "danych": 17,
+   "wycieki_srednio": 1.0,
+   "wycieki": {
+    "chemia / onkolog (choroba mamy)": 3
+   },
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 10.8,
+   "do_sprawdzenia": 0,
+   "etapy": {
+    "gosia (imię małymi literami i nick „Gosia N.”)": "N",
+    "Kasia": "N",
+    "zbyszek": "N",
+    "kowal (nazwisko-słowo)": "N",
+    "wilk („panią wilk”)": "N",
+    "mietek / żuraw": "N",
+    "trzysta czterdzieści (telefon słownie)": "R",
+    "Długiej 5 (adres bez „ul.”)": "R",
+    "(at) wp (e-mail „(at)”)": "R",
+    "chemia / onkolog (choroba mamy)": "✗",
+    "Bartka": "N",
+    "Zuzię": "N",
+    "Krzysiu (wołacz)": "N",
+    "Krzysztof / Bąk": "N",
+    "rysiek / sowa": "N",
+    "512 777 093": "R",
+    "1090 1014": "R"
+   },
+   "brakujace_fragmenty": []
+  },
+  {
+   "nazwa": "6_notatka_posrednia_identyfikacja",
+   "opis": "Notatka HR: identyfikacja pośrednia, dane szczególne",
+   "danych": 12,
+   "wycieki_srednio": 2.0,
+   "wycieki": {
+    "jedyna kobieta": 3,
+    "Świadek Jehowy (wyznanie)": 3
+   },
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 8.8,
+   "do_sprawdzenia": 0,
+   "etapy": {
+    "M.Z. (inicjały)": "N",
+    "Zima („p. Zima”)": "N",
+    "Mróz („p. Mróz”)": "N",
+    "Wróbel-Nowicka": "N",
+    "jedyna kobieta": "✗",
+    "syn burmistrza": "L",
+    "mąż kierowniczki": "L",
+    "brata prezesa": "L",
+    "Solidarność (związek zawodowy)": "L",
+    "Świadek Jehowy (wyznanie)": "✗",
+    "depresji": "L",
+    "urazu (uraz dłoni)": "L"
+   },
+   "brakujace_fragmenty": []
+  },
+  {
+   "nazwa": "7_akt_notarialny_odmiana",
+   "opis": "Akt notarialny: ciężka odmiana, KW, działka, kwota słownie",
+   "danych": 18,
+   "wycieki_srednio": 0.0,
+   "wycieki": {},
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 8.0,
+   "do_sprawdzenia": 0,
+   "etapy": {
+    "Bożeną": "N",
+    "Zając-Kołodziejczyk": "L",
+    "Brzęczyszczykiewicz": "N",
+    "Brzęczyszczykiewiczowi (celownik)": "N",
+    "Jana / Marianny (rodzice w dopełniaczu)": "N",
+    "Wasyla / Hanny (rodzice w dopełniaczu)": "N",
+    "Ołeksandr": "N",
+    "Szewczence (celownik)": "L",
+    "Szewczenko": "N",
+    "Zaręczycka 112 (adres wiejski)": "R",
+    "Chrobrego 7": "R",
+    "68110305338": "R",
+    "482913 (paszport UA, złamany między liniami)": "R",
+    "SW1K/00054321/7": "R",
+    "345/7": "R",
+    "czterystu dwunastu tysięcy (kwota słownie)": "R",
+    "dwudziestego czwartego lutego (data słownie)": "R",
+    "24.02.2025": "R"
+   },
+   "brakujace_fragmenty": []
+  },
+  {
+   "nazwa": "8_email_wielojezyczny",
+   "opis": "E-mail PL/EN/DE: nazwisko w URL i loginie, angielska data",
+   "danych": 16,
+   "wycieki_srednio": 1.0,
+   "wycieki": {
+    "Schröder (nazwisko panieńskie „née”)": 3
+   },
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 13.0,
+   "do_sprawdzenia": 0,
+   "etapy": {
+    "Teodor": "N",
+    "Wiśniewski": "N",
+    "Zbyszek (podpis)": "N",
+    "zbigniew-lukaszewicz": "R",
+    "zbych.lukaszewicz": "R",
+    "Becker": "N",
+    "Hannah": "L",
+    "Ingrid": "N",
+    "Schröder (nazwisko panieńskie „née”)": "✗",
+    "Lukas": "N",
+    "Ola (zdrobnienie w cudzysłowie)": "N",
+    "May 14th, 1961": "R",
+    "DE89 3704": "R",
+    "853-12-40": "R",
+    "biuro@lex-poznan.example": "R",
+    "EUR 2.400": "R"
+   },
+   "brakujace_fragmenty": []
+  }
+ ],
+ "kategorie": {
+  "ADRES": {
+   "ukryto": 27,
+   "razem": 27
+  },
+  "DATA": {
+   "ukryto": 33,
+   "razem": 33
+  },
+  "DOC_ID": {
+   "ukryto": 3,
+   "razem": 3
+  },
+  "DOWOD": {
+   "ukryto": 3,
+   "razem": 3
+  },
+  "DZIALKA": {
+   "ukryto": 3,
+   "razem": 3
+  },
+  "EMAIL": {
+   "ukryto": 12,
+   "razem": 12
+  },
+  "FIRMA": {
+   "ukryto": 6,
+   "razem": 6
+  },
+  "IBAN": {
+   "ukryto": 12,
+   "razem": 12
+  },
+  "IP": {
+   "ukryto": 6,
+   "razem": 6
+  },
+  "KARTA": {
+   "ukryto": 3,
+   "razem": 3
+  },
+  "KW": {
+   "ukryto": 3,
+   "razem": 3
+  },
+  "KWOTA": {
+   "ukryto": 18,
+   "razem": 18
+  },
+  "LOGIN": {
+   "ukryto": 3,
+   "razem": 3
+  },
+  "NIP": {
+   "ukryto": 3,
+   "razem": 3
+  },
+  "OSOBA": {
+   "ukryto": 126,
+   "razem": 129
+  },
+  "PASZPORT": {
+   "ukryto": 3,
+   "razem": 3
+  },
+  "PESEL": {
+   "ukryto": 18,
+   "razem": 18
+  },
+  "POSREDNI": {
+   "ukryto": 9,
+   "razem": 12
+  },
+  "PROFIL": {
+   "ukryto": 3,
+   "razem": 3
+  },
+  "REGON": {
+   "ukryto": 3,
+   "razem": 3
+  },
+  "TEL": {
+   "ukryto": 21,
+   "razem": 21
+  },
+  "WRAZLIWE": {
+   "ukryto": 3,
+   "razem": 6
+  },
+  "ZDROWIE": {
+   "ukryto": 9,
+   "razem": 12
+  }
+ }
+}

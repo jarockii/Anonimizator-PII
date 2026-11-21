@@ -1,4 +1,21 @@
+"""Szara strefa GLiNER-a: jak pewny jest NER przy prawdziwych danych, a jak przy zwykłych słowach.
+
+Pomysł: tam, gdzie GLiNER się waha (szara strefa pewności), pomaga mu LLM.
+Ten skrypt mierzy na 8 dokumentach z przyklady/, ile prawdziwych danych osobowych
+i ile fałszywych alarmów wpada do każdej strefy.
+
+Uruchom z katalogu projektu:
+    python eval/szara_strefa.py
+    python eval/szara_strefa.py --dol 0.2 --gora 0.5
+    ANONIMIZATOR_NER_MODEL=modele/gliner-pl python eval/szara_strefa.py --nazwa po
+
+Wynik: tabela w konsoli + eval/wyniki/szara_strefa_<nazwa>.png i .json
+(porównanie dwóch pomiarów: python eval/porownaj_ner.py)
+Autor: Wiktor Jarocki
+"""
+
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -72,7 +89,7 @@ def strefa(pewnosc, dol, gora):
 
 def zmierz(model):
     """Zwraca dwie listy:
-    - prawdziwe: (dokument, dana z klucza, najwyższa pewność GLiNER-a albo None),
+    - prawdziwe: (dokument, dana z klucza, najwyższa pewność GLiNER-a albo None, kategoria),
     - falszywe:  (dokument, wykryty tekst, pewność) – wykrycia spoza klucza.
     """
     prawdziwe, falszywe = [], []
@@ -93,7 +110,8 @@ def zmierz(model):
             if not any(visible(f, tekst_po_regexie) for f in item.fragments):
                 continue
             pewnosci = [p for t, _, p in wykrycia if pasuje(t, item)]
-            prawdziwe.append((adnotacja.name, item.label, max(pewnosci) if pewnosci else None))
+            prawdziwe.append((adnotacja.name, item.label, max(pewnosci) if pewnosci else None,
+                              item.category))
 
         # Fałszywe alarmy: wykrycia, które nie pasują do niczego w kluczu.
         for tekst_encji, _, pewnosc in wykrycia:
@@ -122,12 +140,12 @@ def wypisz(prawdziwe, falszywe, dol, gora):
     print(f"{'Fałszywe alarmy':26}{f['maskuj']:>10}{f['szara']:>12}{f['pomiń']:>10}")
 
     print("\nPrawdziwe dane w szarej strefie (tu LLM może pomóc):")
-    for dok, dana, pew in sorted(prawdziwe, key=lambda x: x[2] or 0):
+    for dok, dana, pew, _ in sorted(prawdziwe, key=lambda x: x[2] or 0):
         if strefa(pew, dol, gora) == "szara":
             print(f"  {pew:.2f}  [{dok[:1]}] {dana}")
 
     print(f"\nPrawdziwe dane, których GLiNER prawie nie widzi (< {dol}) – kaskada nie pomoże:")
-    for dok, dana, pew in prawdziwe:
+    for dok, dana, pew, _ in prawdziwe:
         if strefa(pew, dol, gora) == "pomiń":
             opis = "brak" if pew is None else f"{pew:.2f}"
             print(f"  {opis:>4}  [{dok[:1]}] {dana}")
@@ -137,7 +155,7 @@ def wypisz(prawdziwe, falszywe, dol, gora):
 # 5. Wykres
 # ---------------------------------------------------------------------------
 
-def narysuj(prawdziwe, falszywe, dol, gora, plik):
+def narysuj(prawdziwe, falszywe, dol, gora, plik, nazwa):
     import matplotlib
     matplotlib.use("Agg")                    # rysuj do pliku, bez okna
     import matplotlib.pyplot as plt
@@ -156,9 +174,9 @@ def narysuj(prawdziwe, falszywe, dol, gora, plik):
             licznik[min(int(p / szer), 19)] += 1
         return licznik
 
-    h_prawdziwe = histogram([p for _, _, p in prawdziwe if p is not None])
+    h_prawdziwe = histogram([x[2] for x in prawdziwe if x[2] is not None])
     h_falszywe = histogram([p for _, _, p in falszywe])
-    niewidoczne = sum(1 for _, _, p in prawdziwe if p is None)
+    niewidoczne = sum(1 for x in prawdziwe if x[2] is None)
 
     fig, ax = plt.subplots(figsize=(11, 6.2), dpi=150)
     fig.patch.set_facecolor(tlo)
@@ -193,9 +211,9 @@ def narysuj(prawdziwe, falszywe, dol, gora, plik):
         ax.spines[bok].set_color(szary_tekst)
     ax.tick_params(colors=szary_tekst)
 
-    szare_p = sum(1 for _, _, p in prawdziwe if p is not None and dol <= p < gora)
+    szare_p = sum(1 for x in prawdziwe if x[2] is not None and dol <= x[2] < gora)
     szare_f = sum(1 for _, _, p in falszywe if dol <= p < gora)
-    fig.suptitle("Gdzie GLiNER się waha? Pewność wykryć na 8 dokumentach testowych",
+    fig.suptitle(f"Gdzie GLiNER się waha? Pewność wykryć na 8 dokumentach testowych ({nazwa})",
                  x=0.06, ha="left", fontsize=15, fontweight="bold", color=tusz)
     ax.set_title(f"Szara strefa {dol:.2f}–{gora:.2f}: do LLM trafiłoby {szare_p} prawdziwych "
                  f"danych i {szare_f} fałszywych alarmów.  GLiNER nie widzi wcale: "
@@ -214,17 +232,24 @@ def main():
     parser = argparse.ArgumentParser(description="Szara strefa GLiNER-a")
     parser.add_argument("--dol", type=float, default=0.2, help="dolna granica szarej strefy")
     parser.add_argument("--gora", type=float, default=0.5, help="górna granica (próg maskowania)")
+    parser.add_argument("--nazwa", default="przed", help="nazwa pomiaru w plikach wyników, np. przed / po")
     args = parser.parse_args()
 
-    print("Wczytuję GLiNER-a…")
+    print(f"Wczytuję GLiNER-a: {ner_masker.NER_MODEL}")
     model = ner_masker.load_model()
     print("Mierzę:")
     prawdziwe, falszywe = zmierz(model)
     wypisz(prawdziwe, falszywe, args.dol, args.gora)
 
-    plik = ROOT / "eval" / "wyniki" / "szara_strefa.png"
-    narysuj(prawdziwe, falszywe, args.dol, args.gora, plik)
-    print(f"\nWykres zapisany: {plik.relative_to(ROOT)}")
+    wyniki = ROOT / "eval" / "wyniki"
+    plik = wyniki / f"szara_strefa_{args.nazwa}.png"
+    narysuj(prawdziwe, falszywe, args.dol, args.gora, plik, args.nazwa)
+    dane = {"nazwa": args.nazwa, "model": ner_masker.NER_MODEL, "dol": args.dol, "gora": args.gora,
+            "prawdziwe": [dict(zip(("dokument", "dana", "pewnosc", "kategoria"), x)) for x in prawdziwe],
+            "falszywe": [dict(zip(("dokument", "tekst", "pewnosc"), x)) for x in falszywe]}
+    (wyniki / f"szara_strefa_{args.nazwa}.json").write_text(
+        json.dumps(dane, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"\nWykres: {plik.relative_to(ROOT)}  (dane: szara_strefa_{args.nazwa}.json)")
 
 
 if __name__ == "__main__":
