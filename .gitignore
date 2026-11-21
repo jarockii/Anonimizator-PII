@@ -4,3 +4,9 @@ __pycache__/
 .idea/
 .DS_Store
 .pytest_cache/
+tessdata/
+.mypy_cache/
+.ruff_cache/
+Thumbs.db
+# Lokalna konfiguracja Claude Code (podgląd aplikacji)
+.claude/

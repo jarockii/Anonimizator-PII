@@ -1,0 +1,94 @@
+{
+  "plik": "przyklady/4_karta_podpisow_dowod_i_injection.pdf",
+  "opis": "Karta Podpisów, skan dowodu, prompt injection w obrazie",
+  "dane": [
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "KAROLINA",
+        "NOWICKA"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "DAMIAN",
+        "PIOTROWSKI"
+      ]
+    },
+    {
+      "kategoria": "PESEL",
+      "fragmenty": [
+        "93071284956"
+      ]
+    },
+    {
+      "kategoria": "DOWOD",
+      "fragmenty": [
+        "ABA 300000"
+      ]
+    },
+    {
+      "kategoria": "IBAN",
+      "fragmenty": [
+        "PL80 1090"
+      ]
+    },
+    {
+      "kategoria": "KARTA",
+      "fragmenty": [
+        "4111 1111"
+      ]
+    },
+    {
+      "kategoria": "IP",
+      "fragmenty": [
+        "83.21.114.7"
+      ]
+    },
+    {
+      "kategoria": "IP",
+      "fragmenty": [
+        "2a02:a311"
+      ]
+    },
+    {
+      "kategoria": "DOC_ID",
+      "fragmenty": [
+        "7f3c2a91"
+      ]
+    },
+    {
+      "kategoria": "KWOTA",
+      "fragmenty": [
+        "25 000 zł"
+      ]
+    },
+    {
+      "kategoria": "DATA",
+      "fragmenty": [
+        "12.07.1993"
+      ]
+    },
+    {
+      "kategoria": "DATA",
+      "fragmenty": [
+        "19.04.2031"
+      ]
+    },
+    {
+      "kategoria": "DATA",
+      "fragmenty": [
+        "2025-03-18"
+      ]
+    }
+  ],
+  "zwykle_slowa": [
+    "KARTA PODPISÓW",
+    "09:12:44",
+    "POŻYCZKODAWCA",
+    "Załącznik",
+    "Data i adres IP",
+    "RZECZPOSPOLITA POLSKA"
+  ]
+}

@@ -1,0 +1,8 @@
+# Opcjonalny etap NER (GLiNER2-PII, ok. 0,3 mld parametrów, CPU).
+# Instaluje PyTorch (wersja CPU) – kilkaset MB. Bez tego aplikacja działa
+# jak wcześniej: Regex + LLM.
+#   pip install -r requirements-ner.txt
+# Przy pierwszym użyciu model (~1,2 GB) pobiera się z Hugging Face,
+# potem aplikacja ładuje go offline.
+-r requirements.txt
+gliner2[local]==2.1.0

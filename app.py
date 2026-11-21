@@ -12,12 +12,47 @@ from engine.file_reader import (
     join_pages,
     read_uploaded_pages,
 )
-from engine.llm_masker import DEFAULT_MODEL, OLLAMA_URL, check_ollama, get_model_memory_mb
-from engine.pipeline import anonymize, get_process_peak_ram_mb
+from engine.llm_masker import (
+    DEFAULT_MODEL,
+    OLLAMA_URL,
+    OllamaAddressError,
+    check_ollama,
+    get_model_memory_mb,
+    get_model_params,
+    validate_ollama_url,
+)
+from engine.ner_masker import NER_PARAMS, ner_installed, preload_model as preload_ner_model
+from engine.ocr import clear_cache as clear_ocr_cache
+from engine.ocr import ocr_available, ocr_pdf
+from engine.pipeline import KEEPABLE_CATEGORIES, anonymize, get_process_peak_ram_mb
 from engine.redactor import page_count, redact_pdf, redact_text_to_pdf, render_preview
 from engine.vault import Vault, VaultTokenError
 
+# Limit hackathonu na liczbę parametrów modelu językowego.
+PARAM_LIMIT = 4_000_000_000
+
+# Kategorie, które można zostawić jawnie (pipeline.KEEPABLE_CATEGORIES).
+KEEP_OPTIONS = {
+    "ZDROWIE": "🩺 Diagnozy i leczenie (ZDROWIE)",
+    "STANOWISKO": "👔 Stanowiska",
+    "KWOTA": "💰 Kwoty",
+    "DATA": "📅 Daty",
+    "FIRMA": "🏢 Firmy i instytucje",
+}
+assert set(KEEP_OPTIONS) == KEEPABLE_CATEGORIES, "KEEP_OPTIONS musi odpowiadać KEEPABLE_CATEGORIES"
+
 st.set_page_config(page_title="Lokalny Anonimizator PII", page_icon="🛡️", layout="wide")
+
+# Przycisk „Przykłady” obok pola pliku ma mieć tę samą wysokość co pole
+# (pomiar w przeglądarce: pole 68 px, zwykły przycisk 40 px). Ta sama
+# minimalna wysokość dla obu – pole przy wąskim oknie i tak może urosnąć.
+st.markdown(
+    """<style>
+    [data-testid="stFileUploaderDropzone"] { min-height: 4.25rem; }
+    .st-key-examples_box [data-testid="stPopoverButton"] { min-height: 4.25rem; }
+    </style>""",
+    unsafe_allow_html=True,
+)
 
 # --- Trudne przypadki testowe ----------------------------------------------
 # Celowo zawierają: odmianę nazwisk, różne formaty numerów, dane „ukryte”
@@ -107,6 +142,7 @@ def load_test_case(name: str) -> None:
     # Tekst nie pochodzi już z wgranego PDF-a – czarne paski nałożymy
     # na PDF wygenerowany z tekstu.
     st.session_state.pop("source_pdf", None)
+    st.session_state.pop("ocr_report", None)
     st.session_state.raw_pages = {"name": name, "pages": TEST_CASES[name].split(PAGE_BREAK)}
 
 
@@ -134,8 +170,26 @@ def load_uploaded_file(uploader_key: str, target_key: str) -> None:
         # układu, logo, tabel), a nie w PDF-ie wygenerowanym z samego tekstu.
         if uploaded.name.lower().endswith(".pdf"):
             st.session_state.source_pdf = {"name": uploaded.name, "bytes": uploaded.getvalue()}
+            # Wynik OCR jest już w pamięci (read_uploaded_pages go policzył).
+            st.session_state.ocr_report = ocr_pdf(uploaded.getvalue())
         else:
             st.session_state.pop("source_pdf", None)
+            st.session_state.pop("ocr_report", None)
+
+
+def ocr_review_reasons() -> list[str]:
+    """Powody wstrzymania wyniku związane z OCR (obrazy, których nie odczytano)."""
+    report = st.session_state.get("ocr_report")
+    if report is None or "source_pdf" not in st.session_state:
+        return []
+    reasons = []
+    if report.pending:
+        reasons.append(f"PDF zawiera obrazy z możliwym tekstem ({report.pending}), a OCR "
+                       "jest niedostępny – dane na skanach i pieczątkach NIE zostały "
+                       "sprawdzone. Zainstaluj Tesseract z językiem polskim.")
+    if report.errors:
+        reasons.append("OCR nie odczytał części obrazów: " + "; ".join(report.errors[:3]))
+    return reasons
 
 
 @st.cache_data(show_spinner="Zaczerniam dane w PDF...", max_entries=8)
@@ -168,8 +222,10 @@ def show_upload_error(uploader_key: str) -> None:
 
 
 def show_vault_token(current_vault: Vault, key: str) -> None:
-    """Pokazuje cały sejf jako JEDEN token (zamiast tabeli token -> oryginał)."""
-    st.subheader("🔑 Token sejfu")
+    """Pokazuje cały sejf jako JEDEN token (zamiast tabeli token -> oryginał).
+
+    Wywoływane wewnątrz zwiniętej sekcji z tytułem – bez własnego nagłówka.
+    """
     if not len(current_vault):
         st.caption("Sejf jest pusty – token pojawi się po pierwszej anonimizacji.")
         return
@@ -197,179 +253,304 @@ def reset_vault() -> None:
     st.session_state.pop("last_result", None)
     st.session_state.pop("restored", None)
     st.session_state.pop("redaction", None)
+    clear_ocr_cache()  # wyniki OCR zawierają dane wrażliwe
 
 
 vault = get_vault()
 
 # --- Pasek boczny: konfiguracja ----------------------------------------------
 with st.sidebar:
-    st.header("⚙️ Konfiguracja")
-    base_url = st.text_input("Adres Ollamy", value=OLLAMA_URL)
-    model = st.text_input("Model (≤ 4B parametrów)", value=DEFAULT_MODEL)
-    use_llm = st.checkbox("Etap 2: wykrywanie kontekstowe (LLM)", value=True)
+    # Układ: na wierzchu tylko to, czego używa się przy każdym dokumencie
+    # (etapy + stan). Rzadkie ustawienia są w zwiniętych sekcjach – pasek
+    # mieści się na ekranie bez przewijania.
+    st.header("⚙️ Ustawienia")
+    status_box = st.container()  # wypełniany niżej, gdy znamy stan Ollamy
 
-    models = check_ollama(base_url)
-    if models is None:
-        st.error("Ollama nie odpowiada – działa tylko Regex.\n\nUruchom: `ollama serve`")
-    elif model not in models:
-        st.warning(f"Model nie jest pobrany. Uruchom:\n\n`ollama pull {model}`")
-    else:
-        st.success(f"Ollama OK · {model}")
+    use_ner = st.toggle("NER – osoby, firmy, adresy", value=ner_installed(),
+                        disabled=not ner_installed(),
+                        help="GLiNER2-PII (~0,3 mld parametrów, CPU). Szybko zaznacza osoby, "
+                             "firmy, adresy i loginy; LLM sprawdza tekst po nim.")
+    use_llm = st.toggle("LLM – kontekst i dane szczególne", value=True,
+                        help="Mały model w Ollamie: stanowiska, identyfikacja pośrednia, "
+                             "dane o zdrowiu, wyznaniu, związkach zawodowych…")
+    if use_ner and ner_installed():
+        # Wczytanie modelu z dysku trwa ok. 9 s – robimy to w tle od razu
+        # po starcie, a nie przy pierwszym kliknięciu „Anonimizuj”.
+        preload_ner_model()
+
+    with st.expander("🙈 Zostaw jawnie"):
+        st.caption("Wybrane dane NIE będą maskowane. Osoby, PESEL-e, adresy i pozostałe "
+                   "dane szczególne są maskowane zawsze.")
+        # Tylko kategorie, które same z siebie nie wskazują człowieka.
+        keep_categories = [
+            category for category, label in KEEP_OPTIONS.items()
+            if st.checkbox(label, value=False, key=f"keep_{category}")
+        ]
+    if keep_categories:
+        # Poza zwiniętą sekcją – odsłonięte dane muszą być widoczne zawsze.
+        st.warning("Jawnie do AI: " + ", ".join(
+            KEEP_OPTIONS[c].split(" ", 1)[1] for c in keep_categories), icon="👁️")
+
+    with st.expander("🔧 Zaawansowane"):
+        base_url = st.text_input("Adres Ollamy", value=OLLAMA_URL)
+        model = st.text_input("Model (≤ 4 mld parametrów)", value=DEFAULT_MODEL)
+        verify_ner = st.checkbox(
+            "Eksperymentalne: LLM poprawia kategorie NER", value=False,
+            disabled=not (use_ner and use_llm),
+            help="LLM sprawdza kategorie niepewnych wykryć NER (nigdy ich nie odznacza). "
+                 "Wyłączone domyślnie: qwen2.5:3b częściej psuł kategorie, niż je poprawiał.")
 
     st.divider()
     # Rezerwujemy miejsce i wypełniamy je na końcu skryptu – wtedy licznik
     # uwzględnia tokeny dodane w tym samym kliknięciu „Anonimizuj”.
     vault_counter = st.empty()
-    st.button("🗑️ Wyczyść sejf", on_click=reset_vault)
-    st.caption("Wszystko działa lokalnie. Dane nie opuszczają tego komputera.")
+    st.button("🗑️ Wyczyść sejf", on_click=reset_vault, width="stretch")
+    st.caption("🔒 Wszystko działa lokalnie. Dane nie opuszczają tego komputera.")
+
+# --- Stan komponentów: jedna zwięzła lista u góry paska ---------------------
+try:
+    validate_ollama_url(base_url)
+    address_error = None
+except OllamaAddressError as error:
+    address_error = str(error)
+models = None if address_error else check_ollama(base_url)
+
+with status_box:
+    lines = []
+    if address_error:
+        lines.append("🔴 **Ollama:** adres spoza komputera – LLM wyłączony")
+    elif models is None:
+        lines.append("🔴 **Ollama** nie odpowiada – uruchom `ollama serve`")
+    elif model not in models:
+        lines.append(f"🟠 **{model}** nie jest pobrany – `ollama pull {model}`")
+    else:
+        lines.append(f"🟢 **LLM:** {model}")
+    lines.append("🟢 **NER:** GLiNER2-PII" if ner_installed()
+                 else "⚪ **NER:** brak (`pip install -r requirements-ner.txt`)")
+    lines.append("🟢 **OCR:** Tesseract" if ocr_available()
+                 else "⚪ **OCR:** brak Tesseracta (pol)")
+
+    # Limit hackathonu: LLM ≤ 4 mld parametrów. Pokazujemy też sumę z NER,
+    # na wypadek gdyby jury liczyło wszystkie modele razem.
+    llm_params = get_model_params(model, base_url) if use_llm and models else None
+    if llm_params:
+        total = llm_params + (NER_PARAMS if use_ner else 0)
+        icon = "🔴" if llm_params > PARAM_LIMIT else ("🟠" if total > PARAM_LIMIT else "🟢")
+        lines.append(f"{icon} **Parametry:** {total / 1e9:.2f} / {PARAM_LIMIT / 1e9:.0f} mld")
+    st.markdown("  \n".join(lines))
+    if address_error:
+        st.error(address_error)
+    elif llm_params and llm_params > PARAM_LIMIT:
+        st.error(f"Sam LLM ma {llm_params / 1e9:.2f} mld parametrów – ponad limit hackathonu.")
 
 st.title("🛡️ Lokalny Anonimizator PII")
-st.caption("Hybryda: Regex (dane o stałym formacie) + mały LLM przez Ollamę "
-           "(dane kontekstowe) + odwracalny sejf mapowań.")
+st.caption("Regex + NER + mały LLM (Ollama) + OCR obrazów – wszystko lokalnie. "
+           "Do AI w chmurze trafia tekst z tokenami, a odpowiedź wraca z prawdziwymi danymi.")
 
 tab_mask, tab_restore = st.tabs(["1️⃣ Anonimizacja", "2️⃣ De-anonimizacja"])
 
 # --- Zakładka 1: anonimizacja -------------------------------------------------
 with tab_mask:
-    st.write("**Trudne przypadki testowe:**")
-    columns = st.columns(len(TEST_CASES))
-    for column, name in zip(columns, TEST_CASES):
-        column.button(name, on_click=load_test_case, args=(name,))
-
-    st.file_uploader(
-        f"…albo wczytaj plik ({', '.join(SUPPORTED_EXTENSIONS)})",
-        type=SUPPORTED_EXTENSIONS,
-        key="input_file",
-        on_change=load_uploaded_file,
-        args=("input_file", "input_text"),
-    )
+    # Wejście: plik albo przykład w jednym rzędzie (przykłady w menu, żeby
+    # cztery długie przyciski nie zajmowały całej szerokości). Etykieta pola
+    # jest ukryta – lista rozszerzeń i tak widnieje w samym polu – a oba
+    # elementy są wyrównane do GÓRY: po wgraniu pliku pod polem pojawia się
+    # jego nazwa i wyrównanie do dołu rozjeżdżało przycisk.
+    col_file, col_examples = st.columns([4, 1], vertical_alignment="top")
+    with col_file:
+        st.file_uploader(
+            f"Wczytaj plik ({', '.join(SUPPORTED_EXTENSIONS)})",
+            type=SUPPORTED_EXTENSIONS,
+            key="input_file",
+            on_change=load_uploaded_file,
+            args=("input_file", "input_text"),
+            label_visibility="collapsed",
+        )
+    with col_examples, st.container(key="examples_box"):
+        with st.popover("🧪 Przykłady", width="stretch"):
+            st.caption("Trudne przypadki testowe")
+            for name in TEST_CASES:
+                st.button(name, on_click=load_test_case, args=(name,), width="stretch")
     show_upload_error("input_file")
+
+    ocr_report = st.session_state.get("ocr_report")
+    if ocr_report and ocr_report.pending:
+        # Ostrzeżenie zostaje na wierzchu – dotyczy bezpieczeństwa danych.
+        st.warning(f"{ocr_report.pending} obraz(ów) może zawierać tekst, ale OCR jest "
+                   "niedostępny (brak Tesseracta z językiem polskim). Dane na skanach "
+                   "i pieczątkach nie zostaną wykryte.")
 
     raw = st.session_state.get("raw_pages")
     if raw:
         pages = raw["pages"]
-        with st.expander("🔍 Podgląd surowego tekstu wyciągniętego z pliku"):
-            st.caption(f"{raw['name']} · stron: {len(pages)} · znaków: "
-                       f"{sum(len(page) for page in pages)}. Dokładnie to trafia do "
-                       "Regexa i (strona po stronie) do modelu.")
+        with st.expander(f"🔍 Co odczytano z pliku · {raw['name']} · stron: {len(pages)}"):
+            if ocr_report and ocr_report.images_total:
+                parts = [f"obrazów: {ocr_report.images_total}", f"OCR: {ocr_report.images_ocr}"]
+                if ocr_report.images_reused:
+                    parts.append(f"z pamięci: {ocr_report.images_reused}")
+                if ocr_report.skipped_text:
+                    parts.append(f"mają już tekst: {ocr_report.skipped_text}")
+                if ocr_report.skipped_small:
+                    parts.append(f"za małe: {ocr_report.skipped_small}")
+                st.caption("🖼️ " + " · ".join(parts)
+                           + f" · czas OCR: {ocr_report.ocr_ms / 1000:.1f} s")
+            st.caption(f"Znaków: {sum(len(page) for page in pages)}. Dokładnie to trafia do "
+                       "Regexa, NER i (strona po stronie) do modelu.")
             for number, page in enumerate(pages, start=1):
                 st.markdown(f"**Strona {number}** · {len(page)} znaków")
                 st.code(page or "(pusta strona – skan bez tekstu?)",
                         language=None, wrap_lines=True)
 
-    st.text_area("Tekst wejściowy (z danymi wrażliwymi)", key="input_text", height=230)
+    st.text_area("Tekst wejściowy (z danymi wrażliwymi)", key="input_text", height=200)
 
     if st.button("🔒 Anonimizuj", type="primary"):
         text = st.session_state.get("input_text", "")
         if not text.strip():
-            st.info("Wklej tekst albo wybierz przypadek testowy.")
+            st.info("Wklej tekst, wczytaj plik albo wybierz przykład.")
         else:
             # Pasek postępu: przy dłuższym pliku widać, że model pracuje
             # (fragment 3 z 7), zamiast samego kręcącego się kółka.
-            progress = st.progress(0.0, text="Regex + lokalny model analizują tekst...")
+            progress = st.progress(0.0, text="Regex + NER + lokalny model analizują tekst...")
 
             def show_progress(done: int, total: int) -> None:
                 progress.progress(done / total, text=f"LLM: fragment {done} z {total}")
 
             st.session_state.last_result = anonymize(
                 text, vault, use_llm=use_llm, model=model, base_url=base_url,
-                on_progress=show_progress,
+                on_progress=show_progress, use_ner=use_ner, verify_ner=verify_ner,
+                keep_categories=keep_categories,
             )
             progress.empty()
+            st.session_state.last_result.review_reasons.extend(ocr_review_reasons())
             build_redacted_pdf(text, st.session_state.last_result.entities)
 
     result = st.session_state.get("last_result")
     if result:
-        if result.llm_error:
-            st.warning(f"Etap LLM pominięty: {result.llm_error}")
+        st.divider()
+        # Fail-closed: gdy LLM nie zadziałał albo dokument wygląda na prompt
+        # injection, NIE pokazujemy tekstu „do wysłania” bez świadomej decyzji.
+        # Ten komunikat jest PIERWSZY – nie może zginąć pod metrykami.
+        show_output = True
+        if result.needs_review:
+            st.error("⛔ Wynik wymaga sprawdzenia przed wysłaniem do chmury:\n\n"
+                     + "\n\n".join(f"- {reason}" for reason in result.review_reasons))
+            show_output = st.checkbox(
+                "Sprawdziłem tekst – pokaż wynik mimo to",
+                value=False,
+                key=f"review_ack_{id(result)}",
+            )
+        elif not use_llm:
+            st.warning("Etap LLM wyłączony: dane wymagające kontekstu (stanowiska, dane "
+                       "szczególne) nie są wykrywane. Przejrzyj tekst przed wysłaniem.")
+        if result.ner_error:
+            st.info(f"Etap NER pominięty: {result.ner_error}")
 
-        m1, m2, m3, m4, m5 = st.columns(5)
-        m1.metric("Regex", f"{result.regex_ms:.1f} ms")
-        m2.metric("LLM", f"{result.llm_ms / 1000:.2f} s" if use_llm else "wył.")
-        m3.metric("Wykryte encje", len(result.entities))
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Wykryte dane", len(result.entities))
+        m2.metric("Regex", f"{result.regex_ms:.1f} ms")
+        m3.metric("NER", f"{result.ner_ms / 1000:.2f} s"
+                  if use_ner and not result.ner_error else "wył.")
+        m4.metric("LLM", f"{result.llm_ms / 1000:.1f} s" if use_llm else "wył.")
         ram = get_process_peak_ram_mb()
-        m4.metric("RAM aplikacji", f"{ram:.0f} MB" if ram else "—")
         model_ram = get_model_memory_mb(model, base_url)
-        m5.metric("RAM modelu", f"{model_ram:.0f} MB" if model_ram else "—")
+        st.caption(" · ".join(part for part in [
+            f"RAM aplikacji: {ram:.0f} MB" if ram else "",
+            f"RAM modelu LLM: {model_ram:.0f} MB" if model_ram else "",
+        ] if part))
 
-        st.subheader("Tekst bezpieczny do wysłania do chmury")
-        # st.code daje przycisk „kopiuj” w prawym górnym rogu.
-        st.code(result.masked_text, language=None, wrap_lines=True)
-        st.download_button(
-            "💾 Pobierz zanonimizowany tekst (.txt)",
-            data=result.masked_text,
-            file_name="zanonimizowany.txt",
-            mime="text/plain",
-        )
-        with st.expander("🔑 Token sejfu – zapisz, żeby później odszyfrować odpowiedź"):
-            show_vault_token(vault, key="tab1")
+        tab_text, tab_pdf, tab_found = st.tabs(
+            ["📝 Tekst do wysłania", "⬛ PDF z paskami",
+             f"📋 Wykryte dane ({len(result.entities)})"])
 
-        redaction = st.session_state.get("redaction")
-        if redaction:
-            from_source = redaction["source_pdf"] is not None
-            st.subheader("⬛ Dokument z czarnymi paskami")
-            # Obrazy istnieją tylko w wgranym PDF – w PDF-ie z tekstu ich nie ma.
-            redact_images = st.checkbox(
-                "Zamazać również podpisy odręczne, pieczątki i obrazy",
-                value=True,
-                disabled=not from_source,
-                help="Wycina z PDF wszystkie osadzone obrazy (podpis, pieczęć, kod QR, "
-                     "logo) i zostawia w ich miejscu czarny prostokąt. Dotyczy wgranego PDF.",
-            )
-            redacted = make_redacted_pdf(
-                redaction["source_pdf"], redaction["text"], redaction["values"], redact_images
-            )
-            if from_source:
-                source_info = ("oryginalny PDF, strony spłaszczone do obrazu – "
-                               "w pliku nie ma tekstu, który dałoby się skopiować")
-                if redact_images:
-                    source_info += f" · usuniętych obrazów: {redacted.images}"
+        with tab_text:
+            if show_output:
+                # st.code daje przycisk „kopiuj” w prawym górnym rogu.
+                st.code(result.masked_text, language=None, wrap_lines=True)
+                st.download_button(
+                    "💾 Pobierz zanonimizowany tekst (.txt)",
+                    data=result.masked_text,
+                    file_name="zanonimizowany.txt",
+                    mime="text/plain",
+                )
+                with st.expander("🔑 Token sejfu – zapisz, żeby później odszyfrować odpowiedź"):
+                    show_vault_token(vault, key="tab1")
             else:
-                source_info = ("PDF z tekstu – w miejscu danych są tylko paski, "
-                               "prawdziwe wartości nie trafiły do pliku")
-            st.caption(f"Pasków: {redacted.bars} · {source_info}.")
-            if from_source and redact_images and redacted.background_pages:
-                st.info(f"Stron będących skanem: {redacted.background_pages}. Obraz całej "
-                        "strony nie jest zamazywany (strona byłaby czarna). Paski na tekście "
-                        "działają dzięki warstwie OCR, ale podpis odręczny WEWNĄTRZ skanu "
-                        "nie jest osobnym obrazem i nie zostanie wykryty.")
-            st.download_button(
-                "⬛ Pobierz zaczerniony PDF",
-                data=redacted.pdf,
-                file_name=redaction["file_name"],
-                mime="application/pdf",
-            )
-            if redacted.missing:
-                st.warning("Nie znaleziono w PDF (sprawdź ręcznie): "
-                           + ", ".join(redacted.missing))
-            with st.expander("Podgląd zaczernionego dokumentu"):
+                st.info("Najpierw sprawdź tekst i potwierdź powyżej.")
+
+        with tab_pdf:
+            redaction = st.session_state.get("redaction")
+            if not show_output:
+                st.info("Najpierw sprawdź tekst i potwierdź powyżej.")
+            elif redaction:
+                from_source = redaction["source_pdf"] is not None
+                # Obrazy istnieją tylko w wgranym PDF – w PDF-ie z tekstu ich nie ma.
+                redact_images = st.checkbox(
+                    "Zamazać również podpisy odręczne, pieczątki i obrazy",
+                    value=True,
+                    disabled=not from_source,
+                    help="Wycina z PDF wszystkie osadzone obrazy (podpis, pieczęć, kod QR, "
+                         "logo) i zostawia w ich miejscu czarny prostokąt. Dotyczy wgranego PDF.",
+                )
+                redacted = make_redacted_pdf(
+                    redaction["source_pdf"], redaction["text"], redaction["values"], redact_images
+                )
+                if from_source:
+                    source_info = ("oryginalny PDF, strony spłaszczone do obrazu – "
+                                   "w pliku nie ma tekstu, który dałoby się skopiować")
+                    if redact_images:
+                        source_info += f" · usuniętych obrazów: {redacted.images}"
+                else:
+                    source_info = ("PDF z tekstu – w miejscu danych są tylko paski, "
+                                   "prawdziwe wartości nie trafiły do pliku")
+                st.caption(f"Pasków: {redacted.bars} · {source_info}.")
+                if from_source and redact_images and redacted.background_pages:
+                    st.info(f"Stron będących skanem: {redacted.background_pages}. Obraz całej "
+                            "strony nie jest zamazywany (strona byłaby czarna). Paski na tekście "
+                            "działają dzięki warstwie OCR, ale podpis odręczny WEWNĄTRZ skanu "
+                            "nie jest osobnym obrazem i nie zostanie wykryty.")
+                if redacted.missing:
+                    st.warning("Nie znaleziono w PDF (sprawdź ręcznie): "
+                               + ", ".join(redacted.missing))
+                st.download_button(
+                    "⬛ Pobierz zaczerniony PDF",
+                    data=redacted.pdf,
+                    file_name=redaction["file_name"],
+                    mime="application/pdf",
+                )
                 pages = page_count(redacted.pdf)
                 page = 1
                 if pages > 1:
-                    page = st.number_input("Strona", min_value=1, max_value=pages, value=1)
+                    page = st.number_input("Strona podglądu", min_value=1, max_value=pages, value=1)
                 st.image(render_preview(redacted.pdf, page - 1))
 
-        st.subheader("Wykryte encje")
-        if result.entities:
-            st.dataframe(result.entities, hide_index=True)
-        else:
-            st.write("Nie wykryto danych wrażliwych.")
+        with tab_found:
+            if result.entities:
+                st.dataframe(result.entities, hide_index=True, width="stretch")
+            else:
+                st.write("Nie wykryto danych wrażliwych.")
+            if result.kept_entities:
+                st.markdown("**👁️ Zostawione jawnie (na Twoje życzenie)**")
+                st.caption("Wykryte, ale NIE zamaskowane i bez czarnego paska w PDF – "
+                           "zmień w pasku bocznym „Zostaw jawnie”.")
+                st.dataframe(result.kept_entities, hide_index=True, width="stretch")
 
 # --- Zakładka 2: de-anonimizacja ---------------------------------------------
 with tab_restore:
-    st.write("Wklej odpowiedź z ChatGPT / innego AI zawierającą tokeny "
-             "(np. `[OSOBA_1]`). Aplikacja podstawi oryginalne dane z lokalnego sejfu.")
-    st.button("🧪 Demo: wstaw zanonimizowany tekst jako odpowiedź AI",
-              on_click=use_masked_as_demo_response,
-              disabled="last_result" not in st.session_state)
-
-    st.file_uploader(
-        "…albo wczytaj odpowiedź AI z pliku",
-        type=SUPPORTED_EXTENSIONS,
-        key="response_file",
-        on_change=load_uploaded_file,
-        args=("response_file", "cloud_response"),
-    )
+    st.caption("Wklej odpowiedź z ChatGPT / innego AI zawierającą tokeny "
+               "(np. `[OSOBA_1]`). Aplikacja podstawi oryginalne dane z lokalnego sejfu.")
+    col_file, col_demo = st.columns([4, 1], vertical_alignment="bottom")
+    with col_file:
+        st.file_uploader(
+            "Wczytaj odpowiedź AI z pliku",
+            type=SUPPORTED_EXTENSIONS,
+            key="response_file",
+            on_change=load_uploaded_file,
+            args=("response_file", "cloud_response"),
+        )
+    with col_demo:
+        st.button("🧪 Demo", on_click=use_masked_as_demo_response,
+                  disabled="last_result" not in st.session_state, width="stretch",
+                  help="Wstawia zanonimizowany tekst jako „odpowiedź AI” – do pokazu.")
     show_upload_error("response_file")
 
     st.text_area("Odpowiedź z chmury", key="cloud_response", height=200)
@@ -412,7 +593,7 @@ with tab_restore:
             st.warning("Tokeny nieobecne w sejfie (AI mogło je wymyślić): "
                        + ", ".join(restored["unknown"]))
 
-    st.divider()
-    show_vault_token(vault, key="tab2")
+    with st.expander("🔑 Token sejfu z tej sesji"):
+        show_vault_token(vault, key="tab2")
 
 vault_counter.metric("Tokenów w sejfie", len(vault))

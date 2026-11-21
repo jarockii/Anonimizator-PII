@@ -137,6 +137,65 @@ class Vault:
                 text, _ = self.replace_everywhere(text, value, token)
         return text
 
+    def mask_surnames(self, text: str) -> tuple[str, list[dict]]:
+        """Samo nazwisko osoby, której pełne imię i nazwisko już zamaskowano.
+
+        Prawdziwy wyciek (przyklady/4_*.pdf): „DAMIAN PIOTROWSKI” był
+        zamaskowany, ale w skanie dowodu stało osobno „Nazwisko: PIOTROWSKI”
+        – raz łapał to LLM, raz nie. To ma być pewne, nie przypadkowe.
+
+        Bierzemy ostatnie słowo każdej OSOBY z co najmniej dwóch słów
+        (≥ 4 litery, z wielkiej litery) i maskujemy jego wystąpienia pisane
+        wielką literą. Imion osobno nie ruszamy – „Pani Agnieszce Dudek”
+        zamaskowałoby każde „Pani” w dokumencie.
+        """
+        applied: list[dict] = []
+        surnames = {}
+        for token, value in self._token_to_value.items():
+            if _category_of(token) != "OSOBA":
+                continue
+            words = value.split()
+            if len(words) < 2:
+                continue
+            last = words[-1].strip(".,;:()\"'„”")
+            if len(last) >= 4 and last[0].isupper() and last.isalpha():
+                surnames.setdefault(last.casefold(), last)
+        for surname in sorted(surnames.values(), key=len, reverse=True):
+            pattern = value_pattern(surname, ignore_case=True)
+            if not any(m.group(1) is None and m.group(0)[0].isupper()
+                       for m in pattern.finditer(text)):
+                continue
+            token = self.tokenize("OSOBA", surname)
+
+            def replace(match: re.Match) -> str:
+                if match.group(1) or not match.group(0)[0].isupper():
+                    return match.group(0)
+                return token
+
+            text = pattern.sub(replace, text)
+            applied.append({"token": token, "kategoria": "OSOBA", "oryginał": surname,
+                            "źródło": "propagacja"})
+        return text, applied
+
+    def restore_categories(self, text: str, categories: set[str]) -> tuple[str, set[str]]:
+        """Przywraca jawny tekst TYLKO dla tokenów z podanych kategorii.
+
+        Służy do świadomego zostawienia np. diagnoz (ZDROWIE) w tekście dla AI.
+        Zwraca (tekst, zbiór przywróconych tokenów).
+        """
+        restored: set[str] = set()
+        if not categories:
+            return text, restored
+
+        def replace(match: re.Match) -> str:
+            token = f"[{match.group(1).upper()}]"
+            if token in self._token_to_value and _category_of(token) in categories:
+                restored.add(token)
+                return self._token_to_value[token]
+            return match.group(0)
+
+        return TOKEN_PATTERN.sub(replace, text), restored
+
     def restore(self, text: str) -> str:
         """Podmienia wszystkie znane tokeny w tekście na oryginalne dane.
 

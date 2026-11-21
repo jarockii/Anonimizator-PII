@@ -1,0 +1,90 @@
+{
+  "plik": "przyklady/6_notatka_posrednia_identyfikacja.pdf",
+  "opis": "Notatka HR: identyfikacja pośrednia, dane szczególne",
+  "dane": [
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "M.Z."
+      ],
+      "opis": "inicjały"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Zima"
+      ],
+      "opis": "„p. Zima”"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Mróz"
+      ],
+      "opis": "„p. Mróz”"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Wróbel-Nowicka"
+      ]
+    },
+    {
+      "kategoria": "POSREDNI",
+      "fragmenty": [
+        "jedyna kobieta"
+      ]
+    },
+    {
+      "kategoria": "POSREDNI",
+      "fragmenty": [
+        "syn burmistrza"
+      ]
+    },
+    {
+      "kategoria": "POSREDNI",
+      "fragmenty": [
+        "mąż kierowniczki"
+      ]
+    },
+    {
+      "kategoria": "POSREDNI",
+      "fragmenty": [
+        "brata prezesa"
+      ]
+    },
+    {
+      "kategoria": "WRAZLIWE",
+      "fragmenty": [
+        "Solidarność"
+      ],
+      "opis": "związek zawodowy"
+    },
+    {
+      "kategoria": "WRAZLIWE",
+      "fragmenty": [
+        "Świadek Jehowy"
+      ],
+      "opis": "wyznanie"
+    },
+    {
+      "kategoria": "ZDROWIE",
+      "fragmenty": [
+        "depresji"
+      ]
+    },
+    {
+      "kategoria": "ZDROWIE",
+      "fragmenty": [
+        "urazu"
+      ],
+      "opis": "uraz dłoni"
+    }
+  ],
+  "zwykle_slowa": [
+    "NOTATKA SŁUŻBOWA",
+    "rozładunku",
+    "Pierwszej pomocy",
+    "przeglądu"
+  ]
+}

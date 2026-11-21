@@ -9,6 +9,7 @@ Wszystko dzieje się lokalnie, w pamięci. Plik nie jest nigdzie zapisywany.
 """
 
 import io
+import unicodedata
 from pathlib import Path
 
 TEXT_EXTENSIONS = {".txt", ".md", ".csv", ".log", ".json"}
@@ -50,13 +51,35 @@ HYPHEN_LOOKALIKES = {
 _HYPHEN_TABLE = str.maketrans(HYPHEN_LOOKALIKES)
 
 
-def normalize_pdf_text(text: str) -> str:
-    """Ujednolica „podróbki” myślnika i usuwa niewidoczne znaki."""
-    return text.translate(_HYPHEN_TABLE)
+def normalize_text(text: str) -> str:
+    """Ujednolica tekst, zanim zobaczy go Regex i model.
+
+    Bez tego dane można „przemycić” obok wzorców, np. PESEL z niewidoczną
+    spacją w środku („9203150\\u200b2349”) wygląda normalnie, ale regex
+    go nie widzi i dane trafiają do chmury.
+
+    1. Podróbki myślnika -> „-” (SOFT HYPHEN z PDF itd.).
+    2. NFKC: cyfry pełnej szerokości („９２０…”) -> zwykłe cyfry, twarda spacja
+       -> spacja, ligatury („ﬁ”) -> „fi”.
+    3. Usunięcie pozostałych znaków formatujących Unicode (kategoria Cf:
+       zero-width joiner, znaczniki kierunku tekstu itp.).
+    Znaki sterujące (nowa linia, tabulator, „\\f” = nowa strona) zostają.
+    """
+    text = unicodedata.normalize("NFKC", text.translate(_HYPHEN_TABLE))
+    return "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
 
 
-def read_pdf_pages(data: bytes) -> list[str]:
-    """Zwraca tekst PDF jako listę stron (jedna pozycja = jedna strona)."""
+# Dawna nazwa – PDF używa tej samej, pełnej normalizacji.
+normalize_pdf_text = normalize_text
+
+
+def read_pdf_pages(data: bytes, ocr: bool = True) -> list[str]:
+    """Zwraca tekst PDF jako listę stron (jedna pozycja = jedna strona).
+
+    ocr=True: tekst rozpoznany na OBRAZACH strony (skan, pieczątka, zdjęcie
+    dokumentu) jest doklejany na końcu tej strony – patrz engine/ocr.py.
+    Strony bez obrazów nie są przepuszczane przez OCR.
+    """
     # PyMuPDF – ta sama biblioteka, która potem zaczernia dane w PDF.
     # Dzięki temu tekst, w którym szukamy encji, jest identyczny z tym,
     # który redaktor znajdzie na stronie.
@@ -72,9 +95,23 @@ def read_pdf_pages(data: bytes) -> list[str]:
                  for page in document]
     except (RuntimeError, ValueError) as error:
         raise FileReadError(f"Uszkodzony plik PDF: {error}") from error
+
+    if ocr:
+        from engine.ocr import ocr_pdf
+
+        report = ocr_pdf(data)
+        pages = [
+            "\n".join(part for part in (page, normalize_pdf_text(extra).strip()) if part)
+            for page, extra in zip(pages, report.texts)
+        ]
+        if not any(pages) and report.pending:
+            raise FileReadError(
+                "PDF to skan (same obrazy), a OCR jest niedostępny. Zainstaluj Tesseract "
+                "z językiem polskim, żeby odczytać tekst z obrazów."
+            )
     if not any(pages):
-        # PDF ze skanem to obrazki, nie tekst – potrzebny byłby OCR.
-        raise FileReadError("PDF nie zawiera tekstu (prawdopodobnie to skan).")
+        raise FileReadError("PDF nie zawiera tekstu – ani w warstwie tekstowej, "
+                            "ani na obrazach (pusty skan?).")
     return pages
 
 

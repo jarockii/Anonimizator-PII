@@ -1,0 +1,130 @@
+{
+  "plik": "przyklady/7_akt_notarialny_odmiana.pdf",
+  "opis": "Akt notarialny: ciężka odmiana, KW, działka, kwota słownie",
+  "dane": [
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Bożeną"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Zając-Kołodziejczyk"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Brzęczyszczykiewicz"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Brzęczyszczykiewiczowi"
+      ],
+      "opis": "celownik"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Jana",
+        "Marianny"
+      ],
+      "opis": "rodzice w dopełniaczu"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Wasyla",
+        "Hanny"
+      ],
+      "opis": "rodzice w dopełniaczu"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Ołeksandr"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Szewczence"
+      ],
+      "opis": "celownik"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Szewczenko"
+      ]
+    },
+    {
+      "kategoria": "ADRES",
+      "fragmenty": [
+        "Zaręczycka 112"
+      ],
+      "opis": "adres wiejski"
+    },
+    {
+      "kategoria": "ADRES",
+      "fragmenty": [
+        "Chrobrego 7"
+      ]
+    },
+    {
+      "kategoria": "PESEL",
+      "fragmenty": [
+        "68110305338"
+      ]
+    },
+    {
+      "kategoria": "PASZPORT",
+      "fragmenty": [
+        "482913"
+      ],
+      "opis": "paszport UA, złamany między liniami"
+    },
+    {
+      "kategoria": "KW",
+      "fragmenty": [
+        "SW1K/00054321/7"
+      ]
+    },
+    {
+      "kategoria": "DZIALKA",
+      "fragmenty": [
+        "345/7"
+      ]
+    },
+    {
+      "kategoria": "KWOTA",
+      "fragmenty": [
+        "czterystu dwunastu tysięcy"
+      ],
+      "opis": "kwota słownie"
+    },
+    {
+      "kategoria": "DATA",
+      "fragmenty": [
+        "dwudziestego czwartego lutego"
+      ],
+      "opis": "data słownie"
+    },
+    {
+      "kategoria": "DATA",
+      "fragmenty": [
+        "24.02.2025"
+      ]
+    }
+  ],
+  "zwykle_slowa": [
+    "AKT NOTARIALNY",
+    "Kodeksu cywilnego",
+    "taksę notarialną",
+    "obręb 0012"
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "plik": "przyklady/2_skan_bez_warstwy_tekstowej.pdf",
+  "opis": "Karta szpitalna – sam skan, pełny OCR",
+  "dane": [
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Henryk",
+        "Zawadzki"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Teresa",
+        "Zawadzka"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Andrzej",
+        "Kamiński"
+      ],
+      "opis": "lekarz z tytułem „lek. med.”"
+    },
+    {
+      "kategoria": "FIRMA",
+      "fragmenty": [
+        "Rogali"
+      ],
+      "opis": "szpital nazwany imieniem osoby"
+    },
+    {
+      "kategoria": "PESEL",
+      "fragmenty": [
+        "10446533"
+      ],
+      "opis": "OCR wstawił spację: „561 10446533”"
+    },
+    {
+      "kategoria": "ADRES",
+      "fragmenty": [
+        "Szczecińska 41/12"
+      ]
+    },
+    {
+      "kategoria": "TEL",
+      "fragmenty": [
+        "842 17 66"
+      ]
+    },
+    {
+      "kategoria": "TEL",
+      "fragmenty": [
+        "691 220 845"
+      ]
+    },
+    {
+      "kategoria": "KWOTA",
+      "fragmenty": [
+        "186,40"
+      ]
+    },
+    {
+      "kategoria": "DATA",
+      "fragmenty": [
+        "14.01.2025"
+      ]
+    },
+    {
+      "kategoria": "DATA",
+      "fragmenty": [
+        "22.01.2025"
+      ]
+    },
+    {
+      "kategoria": "ZDROWIE",
+      "fragmenty": [
+        "obturacyjnej"
+      ],
+      "opis": "diagnoza"
+    }
+  ],
+  "zwykle_slowa": [
+    "KARTA INFORMACYJNA",
+    "Adres:",
+    "Telefon:",
+    "4 tygodnie",
+    "Rozpoznanie"
+  ]
+}
