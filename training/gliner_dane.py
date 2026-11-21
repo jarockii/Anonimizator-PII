@@ -10,6 +10,9 @@ Druga runda: przykłady negatywne (wszystkie etykiety puste). Po 1. treningu mod
 maskował same nazwy identyfikatorów („PESEL”), numery wewnętrzne („wew. 214”),
 nazwy miast bez adresu, stanowiska („Oberarzt”) i sklepy pisane małą literą.
 
+Trzecia runda: tytuł/stanowisko + osoba („dr Anna Nowak”, „Head of Sales: …”) –
+same negatywy sprawiły, że model przestał widzieć osoby stojące po tytule.
+
 Ważne: ŻADNE imię, nazwisko ani ulica z dokumentów testowych (eval/oznaczenia)
 nie trafia do treningu. Inaczej model „nauczyłby się sprawdzianu na pamięć”
 i wynik pomiaru byłby nieuczciwy.
@@ -213,7 +216,7 @@ def wyczysc_listy():
     # przykłady negatywne – te same zasady: żadne słowo z testów
     MIASTA_NEG[:] = [m for m in MIASTA_NEG if czyste(*m)]
     SKLEPY[:] = [s for s in SKLEPY if czyste(*s)]
-    for lista in (IDENTYFIKATORY, STANOWISKA):
+    for lista in (IDENTYFIKATORY, STANOWISKA, TYTULY):
         lista[:] = [x for x in lista if czyste(*re.findall(r"\w+", x))]
     return zakazane
 
@@ -352,7 +355,10 @@ SZABLONY_IDENTYFIKATOR = ["Proszę podać {I} w formularzu.", "W polu {I} wpisz 
 
 # numery wewnętrzne: telefon wewnętrzny, pokój, piętro, stanowisko
 NUMERY_WEWNETRZNE = ["wew. {n}", "wewn. {n}", "pokój {p}", "pok. {p}", "sala {n}",
-                     "piętro {k}", "okienko nr {k}", "stanowisko {k}", "budynek {B}"]
+                     "piętro {k}", "okienko nr {k}", "stanowisko {k}", "budynek {B}",
+                     # grafik pracy: zmiany i dyżury z numerem to nie adres
+                     "zmiana {k}", "zmiana poranna {k}", "II zmiana, linia {k}", "dyżur nr {k}",
+                     "dyżur weekendowy {k}", "grafik zmian {k}"]
 SZABLONY_WEWNETRZNY = ["Proszę dzwonić na {W}.", "Sekretariat: {W}.", "Spotkanie w sali obok, {W}.",
                        "Formularze wydaje {W}.", "Kontakt w sprawie faktur – {W}.",
                        "Szkolenie odbędzie się w {W}.", "Pytania kieruj na {W} po 10:00."]
@@ -389,6 +395,26 @@ SZABLONY_SKLEP = ["spotkajmy się koło {D}.", "kupiłem chleb w {Ms}.", "idę d
                   "byłam dziś w {Ms}, tłumy.", "zatankuj na {Ms} przy wyjeździe.",
                   "czekam pod {D} od dziesięciu minut."]
 
+# ---------------------------------------------------------------------------
+# 6c. Tytuł/stanowisko + osoba – przykłady POZYTYWNE (runda 3).
+# Same negatywy z 6b nauczyły model, że „po tytule nie ma osoby”. Tu pokazujemy,
+# że tytuł i stanowisko NIE są encją, ale imię i nazwisko obok nich – tak.
+# ---------------------------------------------------------------------------
+
+# skróty tytułów (nie odmieniają się)
+TYTULY = ["dr", "dr n. med.", "dr hab.", "prof.", "lek. med.", "lek. dent.", "mgr", "mgr inż.",
+          "inż.", "adw.", "r.pr.", "Dr.", "Prof. Dr.", "Dipl.-Ing."]
+# {T} = tytuł, {X} = osoba w danym przypadku (zawsze nazwisko, zwykle z imieniem)
+SZABLONY_TYTUL_OSOBA = {
+    "M": ["Zaświadczenie wystawił{a} {T} {X}.", "Opinię sporządził{a} {T} {X}.",
+          "Podpis: {T} {X}", "Konsultował{a} {T} {X}.", "Prelegent: {T} {X}"],
+    "D": ["Skierowanie od {T} {X}.", "Na wniosek {T} {X} wydłużono termin.",
+          "Pacjent pozostaje pod opieką {T} {X}."],
+    "N": ["Wizyta kontrolna z {T} {X} za miesiąc.", "Rozmawiałem z {T} {X} o wynikach."],
+}
+SZABLONY_STANOWISKO_OSOBA = ["{S}: {X}", "{S} – {X}", "{X}, {S}", "{X} ({s})",
+                             "Kontakt: {X}, {s}."]
+
 
 # ---------------------------------------------------------------------------
 # 7. Składanie przykładów
@@ -415,6 +441,24 @@ def zdanie_negatywne(los):
     return los.choice(SZABLONY_SKLEP).replace("{D}", d).replace("{Ms}", ms)
 
 
+def zdanie_tytul_osoba(los, czat):
+    """Tytuł albo stanowisko obok osoby – oznaczamy TYLKO imię i nazwisko."""
+    osoba = losuj_osobe(los)
+    if los.random() < 0.6:
+        przypadek = los.choice(list(SZABLONY_TYTUL_OSOBA))
+        imie, nazw = osoba["imie"][przypadek], osoba["nazwisko"][przypadek]
+        x = f"{imie} {nazw}" if los.random() < 0.8 else nazw
+        tekst = los.choice(SZABLONY_TYTUL_OSOBA[przypadek]).replace("{T}", los.choice(TYTULY))
+    else:
+        x = f"{osoba['imie']['M']} {osoba['nazwisko']['M']}"
+        s = los.choice(STANOWISKA)
+        tekst = los.choice(SZABLONY_STANOWISKO_OSOBA).replace("{S}", s[0].upper() + s[1:]).replace("{s}", s)
+    if czat:
+        x = x.lower()                         # czat: imiona małymi literami
+    a = "" if osoba["plec"] == "m" else "a"
+    return tekst.replace("{X}", x).replace("{a}", a), {"person": [x]}
+
+
 def zdanie_osoba(los, czat):
     osoba = losuj_osobe(los)
     if los.random() < 0.08:
@@ -434,6 +478,8 @@ def zdanie(los, czat):
     """Jedno losowe zdanie + jego encje."""
     if los.random() < 0.15:                   # przykład negatywny (ok. 15% zdań)
         return zdanie_negatywne(los), {}
+    if los.random() < 0.10:                   # tytuł/stanowisko + osoba (ok. 8,5% zdań)
+        return zdanie_tytul_osoba(los, czat)
     rodzaj = los.random()
     if rodzaj < 0.45:
         tekst, enc, osoba = zdanie_osoba(los, czat)
