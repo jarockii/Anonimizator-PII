@@ -1,0 +1,540 @@
+{
+ "nazwa": "przed",
+ "model": "fastino/gliner2-privacy-filter-PII-multi",
+ "dol": 0.2,
+ "gora": 0.5,
+ "prawdziwe": [
+  {
+   "dokument": "1_umowa_z_pieczatka_i_podpisami",
+   "dana": "Grzegorza / Wróblewskiego (prezes w dopełniaczu)",
+   "pewnosc": 0.9979017972946167,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "1_umowa_z_pieczatka_i_podpisami",
+   "dana": "Grzegorz / Wróblewski (nazwisko na pieczątce (OCR))",
+   "pewnosc": 0.997569739818573,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "1_umowa_z_pieczatka_i_podpisami",
+   "dana": "Małgorzata / Szczepańska",
+   "pewnosc": 0.9977760910987854,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "1_umowa_z_pieczatka_i_podpisami",
+   "dana": "Bursztyn (firma (także WIELKIMI na pieczątce i w logo))",
+   "pewnosc": 0.9689937829971313,
+   "kategoria": "FIRMA"
+  },
+  {
+   "dokument": "2_skan_bez_warstwy_tekstowej",
+   "dana": "Henryk / Zawadzki",
+   "pewnosc": 0.97930508852005,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "2_skan_bez_warstwy_tekstowej",
+   "dana": "Teresa / Zawadzka",
+   "pewnosc": 0.9843664169311523,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "2_skan_bez_warstwy_tekstowej",
+   "dana": "Andrzej / Kamiński (lekarz z tytułem „lek. med.”)",
+   "pewnosc": 0.8475409746170044,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "2_skan_bez_warstwy_tekstowej",
+   "dana": "Rogali (szpital nazwany imieniem osoby)",
+   "pewnosc": 0.8991348147392273,
+   "kategoria": "FIRMA"
+  },
+  {
+   "dokument": "3_skan_z_warstwa_ocr",
+   "dana": "Wojciech / Lis",
+   "pewnosc": 0.9973788261413574,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "3_skan_z_warstwa_ocr",
+   "dana": "Agnieszce / Dudek",
+   "pewnosc": 0.996235191822052,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "4_karta_podpisow_dowod_i_injection",
+   "dana": "KAROLINA / NOWICKA",
+   "pewnosc": 0.9906185269355774,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "4_karta_podpisow_dowod_i_injection",
+   "dana": "DAMIAN / PIOTROWSKI",
+   "pewnosc": 0.9773525595664978,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "gosia (imię małymi literami i nick „Gosia N.”)",
+   "pewnosc": 0.7313917875289917,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "Kasia",
+   "pewnosc": 0.7950299978256226,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "zbyszek",
+   "pewnosc": 0.9784137010574341,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "kowal (nazwisko-słowo)",
+   "pewnosc": 0.9784137010574341,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "wilk („panią wilk”)",
+   "pewnosc": 0.8809798955917358,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "mietek / żuraw",
+   "pewnosc": 0.9307504296302795,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "Bartka",
+   "pewnosc": 0.7642361521720886,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "Zuzię",
+   "pewnosc": 0.7037838101387024,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "Krzysiu (wołacz)",
+   "pewnosc": 0.5342066884040833,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "Krzysztof / Bąk",
+   "pewnosc": 0.9850345253944397,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "dana": "rysiek / sowa",
+   "pewnosc": 0.9448363780975342,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "dana": "M.Z. (inicjały)",
+   "pewnosc": 0.7543200850486755,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "dana": "Zima („p. Zima”)",
+   "pewnosc": 0.9172384738922119,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "dana": "Mróz („p. Mróz”)",
+   "pewnosc": 0.9194996356964111,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "dana": "Wróbel-Nowicka",
+   "pewnosc": 0.9597507119178772,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "7_akt_notarialny_odmiana",
+   "dana": "Bożeną",
+   "pewnosc": 0.8827033638954163,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "7_akt_notarialny_odmiana",
+   "dana": "Zając-Kołodziejczyk",
+   "pewnosc": 0.8827033638954163,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "7_akt_notarialny_odmiana",
+   "dana": "Brzęczyszczykiewicz",
+   "pewnosc": 0.991228461265564,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "7_akt_notarialny_odmiana",
+   "dana": "Brzęczyszczykiewiczowi (celownik)",
+   "pewnosc": 0.4257838726043701,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "7_akt_notarialny_odmiana",
+   "dana": "Jana / Marianny (rodzice w dopełniaczu)",
+   "pewnosc": 0.9621174931526184,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "7_akt_notarialny_odmiana",
+   "dana": "Wasyla / Hanny (rodzice w dopełniaczu)",
+   "pewnosc": 0.9103338122367859,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "7_akt_notarialny_odmiana",
+   "dana": "Ołeksandr",
+   "pewnosc": 0.9845606088638306,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "7_akt_notarialny_odmiana",
+   "dana": "Szewczence (celownik)",
+   "pewnosc": 0.13326314091682434,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "7_akt_notarialny_odmiana",
+   "dana": "Szewczenko",
+   "pewnosc": 0.9845606088638306,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "dana": "Teodor",
+   "pewnosc": 0.8924323320388794,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "dana": "Wiśniewski",
+   "pewnosc": 0.885469913482666,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "dana": "Zbyszek (podpis)",
+   "pewnosc": 0.6657178401947021,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "dana": "Becker",
+   "pewnosc": 0.8378045558929443,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "dana": "Hannah",
+   "pewnosc": 0.8378045558929443,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "dana": "Ingrid",
+   "pewnosc": 0.896623432636261,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "dana": "Schröder (nazwisko panieńskie „née”)",
+   "pewnosc": 0.38365909457206726,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "dana": "Lukas",
+   "pewnosc": 0.9504764080047607,
+   "kategoria": "OSOBA"
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "dana": "Ola (zdrobnienie w cudzysłowie)",
+   "pewnosc": 0.7599512338638306,
+   "kategoria": "OSOBA"
+  }
+ ],
+ "falszywe": [
+  {
+   "dokument": "1_umowa_z_pieczatka_i_podpisami",
+   "tekst": "Gdyni",
+   "pewnosc": 0.05820765718817711
+  },
+  {
+   "dokument": "1_umowa_z_pieczatka_i_podpisami",
+   "tekst": "WV\nNLW",
+   "pewnosc": 0.23363368213176727
+  },
+  {
+   "dokument": "1_umowa_z_pieczatka_i_podpisami",
+   "tekst": "REGON",
+   "pewnosc": 0.1821838915348053
+  },
+  {
+   "dokument": "1_umowa_z_pieczatka_i_podpisami",
+   "tekst": "SP. Z O.O.",
+   "pewnosc": 0.07160382717847824
+  },
+  {
+   "dokument": "1_umowa_z_pieczatka_i_podpisami",
+   "tekst": "NIP",
+   "pewnosc": 0.05933838710188866
+  },
+  {
+   "dokument": "1_umowa_z_pieczatka_i_podpisami",
+   "tekst": "NIP",
+   "pewnosc": 0.09005414694547653
+  },
+  {
+   "dokument": "1_umowa_z_pieczatka_i_podpisami",
+   "tekst": "REGON",
+   "pewnosc": 0.059569962322711945
+  },
+  {
+   "dokument": "1_umowa_z_pieczatka_i_podpisami",
+   "tekst": "WV\nNLW",
+   "pewnosc": 0.11921440064907074
+  },
+  {
+   "dokument": "1_umowa_z_pieczatka_i_podpisami",
+   "tekst": "REGON",
+   "pewnosc": 0.06790415197610855
+  },
+  {
+   "dokument": "2_skan_bez_warstwy_tekstowej",
+   "tekst": "PESEL",
+   "pewnosc": 0.1595640629529953
+  },
+  {
+   "dokument": "2_skan_bez_warstwy_tekstowej",
+   "tekst": "żona",
+   "pewnosc": 0.059023886919021606
+  },
+  {
+   "dokument": "2_skan_bez_warstwy_tekstowej",
+   "tekst": "Poradni Pulmonologicznej",
+   "pewnosc": 0.19386354088783264
+  },
+  {
+   "dokument": "2_skan_bez_warstwy_tekstowej",
+   "tekst": "Oddział Chorób Wewnętrznych",
+   "pewnosc": 0.10541291534900665
+  },
+  {
+   "dokument": "3_skan_z_warstwa_ocr",
+   "tekst": "Urzędem Skarbowym",
+   "pewnosc": 0.322011798620224
+  },
+  {
+   "dokument": "3_skan_z_warstwa_ocr",
+   "tekst": "PESEL",
+   "pewnosc": 0.052601106464862823
+  },
+  {
+   "dokument": "4_karta_podpisow_dowod_i_injection",
+   "tekst": "RZECZPOSPOLITA POLSKA",
+   "pewnosc": 0.5103592276573181
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "tekst": "szwagrowi",
+   "pewnosc": 0.1589077264070511
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "tekst": "męża",
+   "pewnosc": 0.14170798659324646
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "tekst": "mama",
+   "pewnosc": 0.11615411937236786
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "tekst": "hydraulika",
+   "pewnosc": 0.09041908383369446
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "tekst": "biedronki",
+   "pewnosc": 0.6462134718894958
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "tekst": "Wieliczka",
+   "pewnosc": 0.14264488220214844
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "tekst": "Wieliczki",
+   "pewnosc": 0.07650285214185715
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "tekst": "Wieliczki",
+   "pewnosc": 0.17241789400577545
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "tekst": "Wieliczka",
+   "pewnosc": 0.1376800835132599
+  },
+  {
+   "dokument": "5_czat_potoczny",
+   "tekst": "drugie piętro",
+   "pewnosc": 0.06188409402966499
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "tekst": "ratownik",
+   "pewnosc": 0.507834792137146
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "tekst": "burmistrza Kutna",
+   "pewnosc": 0.4009869694709778
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "tekst": "stażysta",
+   "pewnosc": 0.24954494833946228
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "tekst": "kierowniczka zmiany nocnej",
+   "pewnosc": 0.17850711941719055
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "tekst": "radca prawny",
+   "pewnosc": 0.13037239015102386
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "tekst": "operator wózka widłowego nr 7",
+   "pewnosc": 0.10725019127130508
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "tekst": "kierowniczki zmiany",
+   "pewnosc": 0.10071799904108047
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "tekst": "przełożonego",
+   "pewnosc": 0.07917556911706924
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "tekst": "Dyrektor oddziału",
+   "pewnosc": 0.07267791032791138
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "tekst": "UDT",
+   "pewnosc": 0.775549590587616
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "tekst": "zmiana nocna 7",
+   "pewnosc": 0.2668471336364746
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "tekst": "NSZZ",
+   "pewnosc": 0.16751328110694885
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "tekst": "wózka widłowego nr 7",
+   "pewnosc": 0.13076946139335632
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "tekst": "zmiany nocnej",
+   "pewnosc": 0.08729169517755508
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "tekst": "burmistrza Kutna",
+   "pewnosc": 0.0765545591711998
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "tekst": "szpitalu powiatowym",
+   "pewnosc": 0.061349838972091675
+  },
+  {
+   "dokument": "6_notatka_posrednia_identyfikacja",
+   "tekst": "wewn. 214, pokój 3.12",
+   "pewnosc": 0.11847545206546783
+  },
+  {
+   "dokument": "7_akt_notarialny_odmiana",
+   "tekst": "0012 Stary Bielsk",
+   "pewnosc": 0.15849150717258453
+  },
+  {
+   "dokument": "7_akt_notarialny_odmiana",
+   "tekst": "Kłodzku",
+   "pewnosc": 0.05045541375875473
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "tekst": "Mr. W.",
+   "pewnosc": 0.6042236089706421
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "tekst": "Lex Poznań",
+   "pewnosc": 0.9418602585792542
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "tekst": "IBAN",
+   "pewnosc": 0.44143736362457275
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "tekst": "insurer",
+   "pewnosc": 0.3892520070075989
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "tekst": "Oberärztin Kardiologie",
+   "pewnosc": 0.2687399387359619
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "tekst": "kancelaria",
+   "pewnosc": 0.10147856920957565
+  },
+  {
+   "dokument": "8_email_wielojezyczny",
+   "tekst": "clinic",
+   "pewnosc": 0.0660419836640358
+  }
+ ]
+}

@@ -10,3 +10,7 @@ tessdata/
 Thumbs.db
 # Lokalna konfiguracja Claude Code (podgląd aplikacji)
 .claude/
+
+# Dane treningowe i wytrenowane modele – za duże do gita
+training/dane/
+modele/
