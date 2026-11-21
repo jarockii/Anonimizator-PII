@@ -20,7 +20,12 @@ def main():
     parser.add_argument("--epoki", type=int, default=3, help="ile razy model przejdzie przez dane")
     parser.add_argument("--lr", type=float, default=5e-4, help="learning rate – wielkość kroku uczenia")
     parser.add_argument("--batch", type=int, default=8, help="ile przykładów naraz")
+    parser.add_argument("--wyjscie", type=Path, default=WYNIK,
+                        help="katalog gotowego modelu, np. modele/gliner-pl-v2 (nakładki obok: <katalog>-lora)")
     args = parser.parse_args()
+    wynik_dir = args.wyjscie if args.wyjscie.is_absolute() else ROOT / args.wyjscie
+    # nakładki LoRA obok modelu – kolejny trening nie nadpisze poprzedniego
+    lora_dir = LORA if wynik_dir == WYNIK else wynik_dir.with_name(wynik_dir.name + "-lora")
 
     for plik in ("gliner_train.jsonl", "gliner_val.jsonl"):
         if not (DANE / plik).exists():
@@ -35,7 +40,7 @@ def main():
     model = GLiNER2.from_pretrained(ner_masker.NER_MODEL)
 
     config = TrainingConfig(
-        output_dir=str(LORA),
+        output_dir=str(lora_dir),
         num_epochs=args.epoki,
         batch_size=args.batch,
         eval_batch_size=16,
@@ -61,16 +66,16 @@ def main():
     minuty = (time.time() - start) / 60
     print(f"   gotowe w {minuty:.1f} min, najlepszy eval_loss: {wynik.get('best_metric')}")
 
-    najlepsza = LORA / "best"
+    najlepsza = lora_dir / "best"
     if not najlepsza.exists():
-        najlepsza = LORA / "final"
+        najlepsza = lora_dir / "final"
     print(f"3/3 Scalam nakładkę {najlepsza.relative_to(ROOT)} z modelem i zapisuję…")
     baza = GLiNER2.from_pretrained(ner_masker.NER_MODEL)
     scalony = PeftModel.from_pretrained(baza, str(najlepsza)).merge_and_unload()
-    scalony.save_pretrained(str(WYNIK))
-    print(f"\nModel zapisany w {WYNIK.relative_to(ROOT)}")
+    scalony.save_pretrained(str(wynik_dir))
+    print(f"\nModel zapisany w {wynik_dir.relative_to(ROOT)}")
     print("Pomiar PO treningu:")
-    print(f"  ANONIMIZATOR_NER_MODEL={WYNIK.relative_to(ROOT)} python eval/szara_strefa.py --nazwa po")
+    print(f"  ANONIMIZATOR_NER_MODEL={wynik_dir.relative_to(ROOT)} python eval/szara_strefa.py --nazwa po")
 
 
 if __name__ == "__main__":

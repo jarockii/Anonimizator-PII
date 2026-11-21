@@ -1,0 +1,217 @@
+{
+ "konfiguracja": "model=qwen2.5:3b · NER=tak · LLM=tak · przebiegi=2",
+ "dokumenty": [
+  {
+   "nazwa": "1_umowa_z_pieczatka_i_podpisami",
+   "opis": "Umowa najmu: tekst + pieczątka (OCR), podpisy, logo",
+   "danych": 18,
+   "wycieki_srednio": 0.0,
+   "wycieki": {},
+   "nadmiar": {
+    "NIP": 2,
+    "Najemcy": 2
+   },
+   "zostawione": [],
+   "czas_s": 13.0,
+   "do_sprawdzenia": 0,
+   "etapy": {},
+   "brakujace_fragmenty": []
+  },
+  {
+   "nazwa": "2_skan_bez_warstwy_tekstowej",
+   "opis": "Karta szpitalna – sam skan, pełny OCR",
+   "danych": 12,
+   "wycieki_srednio": 1.0,
+   "wycieki": {
+    "obturacyjnej (diagnoza)": 2
+   },
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 6.2,
+   "do_sprawdzenia": 0,
+   "etapy": {},
+   "brakujace_fragmenty": []
+  },
+  {
+   "nazwa": "3_skan_z_warstwa_ocr",
+   "opis": "Pełnomocnictwo – skan z warstwą OCR od skanera",
+   "danych": 8,
+   "wycieki_srednio": 0.0,
+   "wycieki": {},
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 7.0,
+   "do_sprawdzenia": 0,
+   "etapy": {},
+   "brakujace_fragmenty": []
+  },
+  {
+   "nazwa": "4_karta_podpisow_dowod_i_injection",
+   "opis": "Karta Podpisów, skan dowodu, prompt injection w obrazie",
+   "danych": 13,
+   "wycieki_srednio": 0.0,
+   "wycieki": {},
+   "nadmiar": {
+    "RZECZPOSPOLITA POLSKA": 2
+   },
+   "zostawione": [],
+   "czas_s": 3.5,
+   "do_sprawdzenia": 2,
+   "etapy": {},
+   "brakujace_fragmenty": []
+  },
+  {
+   "nazwa": "5_czat_potoczny",
+   "opis": "Czat: imiona małymi literami, zdrobnienia, liczby słownie",
+   "danych": 17,
+   "wycieki_srednio": 1.0,
+   "wycieki": {
+    "chemia / onkolog (choroba mamy)": 2
+   },
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 3.8,
+   "do_sprawdzenia": 0,
+   "etapy": {},
+   "brakujace_fragmenty": []
+  },
+  {
+   "nazwa": "6_notatka_posrednia_identyfikacja",
+   "opis": "Notatka HR: identyfikacja pośrednia, dane szczególne",
+   "danych": 12,
+   "wycieki_srednio": 2.0,
+   "wycieki": {
+    "jedyna kobieta": 2,
+    "urazu (uraz dłoni)": 2
+   },
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 12.6,
+   "do_sprawdzenia": 0,
+   "etapy": {},
+   "brakujace_fragmenty": []
+  },
+  {
+   "nazwa": "7_akt_notarialny_odmiana",
+   "opis": "Akt notarialny: ciężka odmiana, KW, działka, kwota słownie",
+   "danych": 18,
+   "wycieki_srednio": 0.0,
+   "wycieki": {},
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 7.4,
+   "do_sprawdzenia": 0,
+   "etapy": {},
+   "brakujace_fragmenty": []
+  },
+  {
+   "nazwa": "8_email_wielojezyczny",
+   "opis": "E-mail PL/EN/DE: nazwisko w URL i loginie, angielska data",
+   "danych": 16,
+   "wycieki_srednio": 1.0,
+   "wycieki": {
+    "Schröder (nazwisko panieńskie „née”)": 2
+   },
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 7.9,
+   "do_sprawdzenia": 0,
+   "etapy": {},
+   "brakujace_fragmenty": []
+  }
+ ],
+ "kategorie": {
+  "ADRES": {
+   "ukryto": 18,
+   "razem": 18
+  },
+  "DATA": {
+   "ukryto": 22,
+   "razem": 22
+  },
+  "DOC_ID": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "DOWOD": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "DZIALKA": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "EMAIL": {
+   "ukryto": 8,
+   "razem": 8
+  },
+  "FIRMA": {
+   "ukryto": 4,
+   "razem": 4
+  },
+  "IBAN": {
+   "ukryto": 8,
+   "razem": 8
+  },
+  "IP": {
+   "ukryto": 4,
+   "razem": 4
+  },
+  "KARTA": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "KW": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "KWOTA": {
+   "ukryto": 12,
+   "razem": 12
+  },
+  "LOGIN": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "NIP": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "OSOBA": {
+   "ukryto": 84,
+   "razem": 86
+  },
+  "PASZPORT": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "PESEL": {
+   "ukryto": 12,
+   "razem": 12
+  },
+  "POSREDNI": {
+   "ukryto": 6,
+   "razem": 8
+  },
+  "PROFIL": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "REGON": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "TEL": {
+   "ukryto": 14,
+   "razem": 14
+  },
+  "WRAZLIWE": {
+   "ukryto": 4,
+   "razem": 4
+  },
+  "ZDROWIE": {
+   "ukryto": 2,
+   "razem": 8
+  }
+ }
+}

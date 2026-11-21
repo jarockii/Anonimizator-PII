@@ -6,6 +6,10 @@ tworzy sztuczne zdania z fikcyjnymi osobami, adresami, firmami i loginami we
 wszystkich przypadkach, a do tego zdania z rolami („Najemca”, „szwagier”),
 w których NIE MA osoby – żeby model nauczył się, że rola to nie imię.
 
+Druga runda: przykłady negatywne (wszystkie etykiety puste). Po 1. treningu model
+maskował same nazwy identyfikatorów („PESEL”), numery wewnętrzne („wew. 214”),
+nazwy miast bez adresu, stanowiska („Oberarzt”) i sklepy pisane małą literą.
+
 Ważne: ŻADNE imię, nazwisko ani ulica z dokumentów testowych (eval/oznaczenia)
 nie trafia do treningu. Inaczej model „nauczyłby się sprawdzianu na pamięć”
 i wynik pomiaru byłby nieuczciwy.
@@ -206,6 +210,11 @@ def wyczysc_listy():
                       if czyste(*(r + k for k in KONCOWKI_SKI_M + KONCOWKI_SKI_K))]
     ULICE[:] = [u for u in ULICE if czyste(*u)]
     ULICE_NAZWISKA[:] = [u for u in ULICE_NAZWISKA if czyste(u)]
+    # przykłady negatywne – te same zasady: żadne słowo z testów
+    MIASTA_NEG[:] = [m for m in MIASTA_NEG if czyste(*m)]
+    SKLEPY[:] = [s for s in SKLEPY if czyste(*s)]
+    for lista in (IDENTYFIKATORY, STANOWISKA):
+        lista[:] = [x for x in lista if czyste(*re.findall(r"\w+", x))]
     return zakazane
 
 
@@ -328,8 +337,83 @@ SZABLONY_ZWYKLE = ["Termin płatności upływa 15 marca.", "Załącznik nr 2 sta
 
 
 # ---------------------------------------------------------------------------
+# 6b. Przykłady negatywne – słowa, które WYGLĄDAJĄ na dane, a nimi nie są.
+# Wszystkie etykiety puste. Miasta, stanowiska i sklepy celowo INNE niż w testach.
+# ---------------------------------------------------------------------------
+
+# nazwy identyfikatorów (bez wartości obok)
+IDENTYFIKATORY = ["PESEL", "NIP", "REGON", "KRS", "nr dowodu", "numer dowodu osobistego",
+                  "nr paszportu", "nr rachunku", "IBAN", "numer legitymacji", "NIP-UE"]
+SZABLONY_IDENTYFIKATOR = ["Proszę podać {I} w formularzu.", "W polu {I} wpisz dane z dokumentu.",
+                          "Brakuje numeru {I} we wniosku.", "{I}: ………………",
+                          "Czy {I} jest wymagany przy rejestracji?",
+                          "Pole „{I}” zostało puste.", "{I} należy wpisać bez spacji i myślników.",
+                          "Bez {I} nie wyślemy deklaracji.", "Rubryka {I} – do uzupełnienia."]
+
+# numery wewnętrzne: telefon wewnętrzny, pokój, piętro, stanowisko
+NUMERY_WEWNETRZNE = ["wew. {n}", "wewn. {n}", "pokój {p}", "pok. {p}", "sala {n}",
+                     "piętro {k}", "okienko nr {k}", "stanowisko {k}", "budynek {B}"]
+SZABLONY_WEWNETRZNY = ["Proszę dzwonić na {W}.", "Sekretariat: {W}.", "Spotkanie w sali obok, {W}.",
+                       "Formularze wydaje {W}.", "Kontakt w sprawie faktur – {W}.",
+                       "Szkolenie odbędzie się w {W}.", "Pytania kieruj na {W} po 10:00."]
+
+# miasta: (mianownik, dopełniacz, miejscownik) – samo miasto w zdaniu to NIE adres
+MIASTA_NEG = [("Kielce", "Kielc", "Kielcach"), ("Białystok", "Białegostoku", "Białymstoku"),
+              ("Gniezno", "Gniezna", "Gnieźnie"), ("Toruń", "Torunia", "Toruniu"),
+              ("Tarnów", "Tarnowa", "Tarnowie"), ("Koszalin", "Koszalina", "Koszalinie"),
+              ("Suwałki", "Suwałk", "Suwałkach"), ("Legnica", "Legnicy", "Legnicy"),
+              ("Sandomierz", "Sandomierza", "Sandomierzu"), ("Zakopane", "Zakopanego", "Zakopanem"),
+              ("Bydgoszcz", "Bydgoszczy", "Bydgoszczy"), ("Łomża", "Łomży", "Łomży"),
+              ("Przemyśl", "Przemyśla", "Przemyślu"), ("Kalisz", "Kalisza", "Kaliszu")]
+SZABLONY_MIASTO = ["Pracuję w {Ms}.", "Jest lekarzem z {D}.", "Wróciłem wczoraj z {D}.",
+                   "Konferencja w {Ms} była udana.", "{M} to piękne miasto.",
+                   "Pociąg do {D} ma opóźnienie.", "Mamy oddział w {Ms} i dwa w okolicy.",
+                   "Firma przeniosła produkcję do {D}.", "Studiowała w {Ms}.",
+                   "Kierowca jedzie przez {M} do granicy."]
+
+# stanowiska i tytuły – po polsku i obco
+STANOWISKA = ["lekarz kierujący", "lekarz prowadzący", "kierownik działu", "starszy specjalista",
+              "dyrektor handlowy", "pielęgniarka oddziałowa", "radca prawny", "główny księgowy",
+              "Oberarzt", "Abteilungsleiter", "Head of Sales", "Senior Developer",
+              "Account Manager", "Chief Financial Officer", "Geschäftsführer", "Team Lead"]
+SZABLONY_STANOWISKO = ["Skierowanie wystawia {S}.", "Stanowisko: {S}.", "Szukamy osoby na stanowisko {S}.",
+                       "Podpisuje {S} lub jego zastępca.", "Funkcja: {S}, pełny etat.",
+                       "Decyzję zatwierdza {S}.", "Rekrutujemy: {S} (umowa o pracę)."]
+
+# sklepy i marki pisane małą literą w mowie potocznej (mianownik, dopełniacz, miejscownik)
+SKLEPY = [("biedronka", "biedronki", "biedronce"), ("lidl", "lidla", "lidlu"),
+          ("stokrotka", "stokrotki", "stokrotce"), ("rossmann", "rossmanna", "rossmannie"),
+          ("orlen", "orlenu", "orlenie"), ("netto", "netto", "netto"),
+          ("castorama", "castoramy", "castoramie"), ("dino", "dino", "dino")]
+SZABLONY_SKLEP = ["spotkajmy się koło {D}.", "kupiłem chleb w {Ms}.", "idę do {D} po mleko.",
+                  "byłam dziś w {Ms}, tłumy.", "zatankuj na {Ms} przy wyjeździe.",
+                  "czekam pod {D} od dziesięciu minut."]
+
+
+# ---------------------------------------------------------------------------
 # 7. Składanie przykładów
 # ---------------------------------------------------------------------------
+
+def zdanie_negatywne(los):
+    """Zdanie z czymś, co przypomina daną osobową, ale nią nie jest. Encji brak."""
+    rodzaj = los.random()
+    if rodzaj < 0.25:
+        return los.choice(SZABLONY_IDENTYFIKATOR).replace("{I}", los.choice(IDENTYFIKATORY))
+    if rodzaj < 0.45:
+        w = (los.choice(NUMERY_WEWNETRZNE)
+             .replace("{n}", str(los.randint(100, 499)))
+             .replace("{p}", f"{los.randint(0, 6)}.{los.randint(1, 40):02d}")
+             .replace("{k}", str(los.randint(1, 12)))
+             .replace("{B}", los.choice("ABCDE")))
+        return los.choice(SZABLONY_WEWNETRZNY).replace("{W}", w)
+    if rodzaj < 0.70:
+        m, d, ms = los.choice(MIASTA_NEG)
+        return los.choice(SZABLONY_MIASTO).replace("{M}", m).replace("{D}", d).replace("{Ms}", ms)
+    if rodzaj < 0.90:
+        return los.choice(SZABLONY_STANOWISKO).replace("{S}", los.choice(STANOWISKA))
+    _, d, ms = los.choice(SKLEPY)
+    return los.choice(SZABLONY_SKLEP).replace("{D}", d).replace("{Ms}", ms)
+
 
 def zdanie_osoba(los, czat):
     osoba = losuj_osobe(los)
@@ -348,6 +432,8 @@ def zdanie_osoba(los, czat):
 
 def zdanie(los, czat):
     """Jedno losowe zdanie + jego encje."""
+    if los.random() < 0.15:                   # przykład negatywny (ok. 15% zdań)
+        return zdanie_negatywne(los), {}
     rodzaj = los.random()
     if rodzaj < 0.45:
         tekst, enc, osoba = zdanie_osoba(los, czat)
@@ -418,7 +504,8 @@ def main():
     print(f"Wykluczono słowa z testów ({len(zakazane)} słów). Zostało: "
           f"{len(IMIONA_M)} imion męskich, {len(IMIONA_K)} żeńskich, "
           f"{len(RDZENIE_SKI) + len(NAZWISKA_RZECZ) + len(NAZWISKA_KO)} nazwisk, "
-          f"{len(ULICE) + len(ULICE_NAZWISKA)} ulic.")
+          f"{len(ULICE) + len(ULICE_NAZWISKA)} ulic, {len(MIASTA_NEG)} miast "
+          f"i {len(SKLEPY)} sklepów do przykładów negatywnych.")
 
     los = random.Random(ZIARNO)
     rekordy, widziane = [], set()
