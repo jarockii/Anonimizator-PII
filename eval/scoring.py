@@ -76,8 +76,20 @@ def visible(fragment: str, text: str) -> bool:
     „Grzegorz” NIE jest widoczny w „Grzegorza”, a „Lis” nie w „Lisowski” –
     dzięki temu pozycje się nie dublują. Złamanie linii = spacja.
     """
-    pattern = r"(?<!\w)" + re.escape(_normalize(fragment)) + r"(?!\w)"
-    return re.search(pattern, _normalize(text)) is not None
+    if _whole_word(_normalize(fragment), _normalize(text)):
+        return True
+    # OCR różnie wstawia spacje w liczbach („561 10446533” vs „56110446533”) –
+    # zależy od wersji Tesseracta, więc porównujemy też bez spacji między cyframi.
+    return _whole_word(_join_digits(_normalize(fragment)), _join_digits(_normalize(text)))
+
+
+def _join_digits(text: str) -> str:
+    return re.sub(r"(?<=\d) (?=\d)", "", text)
+
+
+def _whole_word(fragment: str, text: str) -> bool:
+    pattern = r"(?<!\w)" + re.escape(fragment) + r"(?!\w)"
+    return re.search(pattern, text) is not None
 
 
 def score_document(annotation: Annotation, masked_text: str,
