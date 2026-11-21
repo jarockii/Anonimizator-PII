@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "eval"))
 from scoring import Annotation, Item, load_annotations, missing_fragments, score_document, visible  # noqa: E402
 
 from engine import ocr  # noqa: E402
-from engine.file_reader import join_pages, read_uploaded_pages  # noqa: E402
+from engine.file_reader import read_uploaded_file  # noqa: E402
 
 
 @pytest.mark.parametrize("fragment, text, expected", [
@@ -70,5 +70,5 @@ def test_annotations_match_document_text(annotation):
     """Literówka w oznaczeniu = dana „zawsze ukryta” – zawyżony wynik pomiaru."""
     if not ocr.ocr_available():
         pytest.skip("część oznaczeń pochodzi z OCR – potrzebny Tesseract")
-    text = join_pages(read_uploaded_pages(annotation.path.name, annotation.path.read_bytes()))
+    text = read_uploaded_file(annotation.path.name, annotation.path.read_bytes())
     assert missing_fragments(annotation, text) == []

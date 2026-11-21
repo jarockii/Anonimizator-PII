@@ -16,7 +16,7 @@ import argparse
 import json
 import sys
 import time
-from collections import Counter, defaultdict
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
@@ -25,7 +25,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from engine import ner_masker  # noqa: E402
-from engine.file_reader import join_pages, read_uploaded_pages  # noqa: E402
+from engine.file_reader import read_uploaded_file  # noqa: E402
 from engine.llm_masker import DEFAULT_MODEL  # noqa: E402
 from engine.pipeline import anonymize  # noqa: E402
 from engine.vault import Vault  # noqa: E402
@@ -49,6 +49,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    # Konsola Windows (cp1250) nie zna „✗”/„⛔” – bez tego wydruk kończył się UnicodeEncodeError.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     args = parse_args()
     use_ner = not args.bez_ner and ner_masker.ner_installed()
     use_llm = not args.bez_llm
@@ -67,7 +69,7 @@ def main() -> int:
     category_total: Counter = Counter()
     category_leaked: Counter = Counter()
     for annotation in annotations:
-        text = join_pages(read_uploaded_pages(annotation.path.name, annotation.path.read_bytes()))
+        text = read_uploaded_file(annotation.path.name, annotation.path.read_bytes())
         missing = missing_fragments(annotation, text)
         if missing:
             print(f"⚠️  {annotation.name}: fragmentów oznaczeń nie ma w dokumencie: {missing}")

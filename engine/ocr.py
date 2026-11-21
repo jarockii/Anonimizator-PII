@@ -72,10 +72,6 @@ class OcrReport:
     errors: list[str] = field(default_factory=list)
     ocr_ms: float = 0.0
 
-    @property
-    def text_found(self) -> bool:
-        return any(text.strip() for text in self.texts)
-
 
 class OcrUnavailableError(RuntimeError):
     """Tesseract albo polski model językowy nie są zainstalowane."""

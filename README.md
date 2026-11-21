@@ -12,18 +12,21 @@ wysyłamy do dowolnego AI w chmurze, a odpowiedź automatycznie „odmaskowujemy
 ollama pull qwen2.5:3b
 
 # 2. Środowisko Pythona
-python3 -m venv .venv
-source .venv/bin/activate
+python -m venv .venv
+.venv\Scripts\activate             # Linux/macOS: source .venv/bin/activate
 pip install -r requirements.txt
+pip install -r requirements-ner.txt   # opcjonalnie: etap NER (PyTorch CPU + GLiNER2)
 
-# 3. Testy
-pytest -v
+# 3. Testy (bez Ollamy; "not slow" pomija testy z prawdziwym modelem NER)
+pytest -m "not slow"
 
 # 4. Aplikacja (http://localhost:8501, dostępna tylko z tego komputera)
-streamlit run app.py --server.address localhost
+streamlit run app.py
 ```
 
-Bez działającej Ollamy aplikacja nadal działa: włącza się tryb samego Regexa i pokazuje ostrzeżenie.
+Bez działającej Ollamy aplikacja nadal działa: włącza się tryb samego Regexa (+ NER), a wynik jest
+wstrzymany do ręcznego sprawdzenia (fail-closed). OCR obrazów w PDF wymaga modeli Tesseracta – patrz
+[OCR tylko na obrazach](#️-ocr-tylko-na-obrazach). Jakość mierzy skrypt [`eval/run_eval.py`](eval/README.md).
 
 ## 🧠 Etap NER (GLiNER2-PII) – opcjonalny
 
@@ -36,7 +39,7 @@ NER nie generuje tekstu, więc nie halucynuje i nie da się go „przekonać” 
 pip install -r requirements-ner.txt   # PyTorch CPU + gliner2; model ~1,2 GB pobierze się raz
 ```
 
-Pomiar na `przyklady/*.pdf` (Regex + NER + qwen2.5:3b): NER 0,16–0,47 s na dokument, LLM 5,7–14,1 s,
+Pomiar na `przyklady/1–4` (Regex + NER + qwen2.5:3b): NER 0,16–0,47 s na dokument, LLM 5,7–14,1 s,
 **0 wycieków i 0 nadmiarowo zamaskowanych słów** na sprawdzanej liście. NER znalazł wszystkie osoby
 we wszystkich plikach (pewność 0,86–1,0) i login `tnowak` z przypadku „Log z błędem”, którego model 3B nie łapał.
 Koszt: **~1,4–1,7 GB RAM** (wagi float32). Kwantyzacja int8 psuła model (0 encji), a bfloat16 była 15× wolniejsza
@@ -53,8 +56,8 @@ Model był trenowany na EN/FR/ES/DE/IT/PT/NL, po polsku działa zero-shot. Progi
 | NER (GLiNER2, 0,31 mld) | osoby, firmy, adresy, loginy | „zbyszek kowal”, „Krzysiu”, „Grzegorzowi Brzęczyszczykiewiczowi” |
 | LLM (qwen2.5:3b) | to, co wymaga rozumienia sensu | **identyfikacja pośrednia** („syn burmistrza Kutna”, `[POSREDNI_n]`), **dane szczególne z art. 9 RODO** (zdrowie, wyznanie, związki zawodowe – osobne, wąskie zapytanie tylko dla fragmentów wskazanych przez słownik, `[WRAZLIWE_n]`), formy, których NER nie zna |
 
-Pomiar na `przyklady/1–8` (60 trudnych fragmentów w plikach 5–8): wycieki **16 → 3**, pliki 1–4 bez wycieków.
-Pozostałe przypadki wymagają wnioskowania („jedyna kobieta na tym stanowisku”) i zmieniają się między
+Pomiar zestawem [`eval/`](eval/README.md) na `przyklady/1–8` (114 ręcznie oznaczonych danych, 2 przebiegi,
+Regex + NER + qwen2.5:3b): **ukryto 218/228 (95,6%)**, pliki 1–4 bez wycieków. Pozostałe przypadki wymagają wnioskowania („jedyna kobieta na tym stanowisku”) i zmieniają się między
 przebiegami – wynik LLM 3B nie jest w pełni powtarzalny. Model może też nadmiarowo zamaskować pojedyncze słowa
 („Najemcy”). Weryfikacja kategorii NER przez LLM jest dostępna jako opcja eksperymentalna (domyślnie wyłączona:
 qwen2.5:3b częściej psuł kategorie, niż je poprawiał).
@@ -95,7 +98,8 @@ Skany, pieczątki i zdjęcia dokumentów w PDF są odczytywane przez OCR (Tesser
 bez dodatkowych bibliotek Pythona). Żeby było szybko i oszczędnie, OCR ([engine/ocr.py](engine/ocr.py)):
 
 - działa **tylko na obrazach** osadzonych w PDF – strona bez obrazów nie trafia do OCR,
-  a renderowany jest wyłącznie prostokąt obrazu (300 dpi, skala szarości),
+  a renderowany jest wyłącznie prostokąt obrazu (300 dpi, RGB – w skali szarości wbudowany
+  Tesseract zwracał pusty tekst),
 - pomija obrazy za małe (ikony, kreski) i takie, które mają już warstwę tekstową (skan z OCR-em),
 - ten sam obraz (np. logo na każdej stronie) rozpoznaje **raz**, a wynik całego pliku zapamiętuje,
   więc odczyt tekstu i zaczernianie nie liczą OCR dwa razy,
@@ -112,7 +116,7 @@ Obrazy w plikach `.docx` nie są jeszcze rozpoznawane.
 
 PDF jest czytany **strona po stronie** (`page.get_text("text", sort=True)`), więc tabele, kolumny
 i pieczęcie z Karty Podpisów (np. Autenti) wychodzą w kolejności czytania. Rozwijana sekcja
-„🔍 Podgląd surowego tekstu” pokazuje dokładnie, co odczytał parser, z podziałem na strony.
+„🔍 Co odczytano z pliku” pokazuje dokładnie, co odczytał parser, z podziałem na strony.
 Tekst jest normalizowany: myślnik zapisany w PDF jako SOFT HYPHEN (U+00AD) zamieniamy na „-”.
 Bez tego NIP, UUID i daty z Karty Podpisów wyglądały poprawnie, ale regex ich nie widział.
 
@@ -165,17 +169,23 @@ zaczerniał każde „ul.” i „2009”. Na 6-stronicowym skanie było to 844 
 ## Architektura hybrydowa
 
 ```
- tekst z PII
+ tekst z PII (plik → engine/file_reader + engine/ocr: OCR tylko na obrazach PDF)
      │
      ▼
-┌─────────────────────┐   24 wzorce, m.in. PESEL, NIP, REGON, KRS, BDO, dowód, paszport,
-│ Etap 1: Regex       │   IBAN, kwoty, adresy, daty, tablice, VIN, UUID, IP, e-mail,
-│ engine/regex_masker │   telefon, hasła i klucze API; sumy kontrolne → < 2 ms
+┌─────────────────────┐   normalizacja Unicode (NFKC, znaki niewidoczne, myślniki)
+│ Etap 1: Regex       │   42 wzorce w 24 kategoriach, m.in. PESEL, NIP, REGON, KRS, dowód,
+│ engine/regex_masker │   paszport, IBAN, karta, kwoty, adresy, daty, IP, e-mail, sekrety;
+│ engine/numerals     │   sumy kontrolne + liczby zapisane słownie → kilka ms
 └─────────┬───────────┘
           ▼
-┌─────────────────────┐   osoby, firmy, adresy, kwoty, stanowiska
-│ Etap 2: LLM ≤ 4B    │   strona po stronie (fragmenty ≤ 400 znaków), temperature 0.0,
-│ engine/llm_masker   │   "format" = JSON Schema (Structured Outputs)
+┌─────────────────────┐   GLiNER2-PII (0,31 mld, CPU, opcjonalny):
+│ Etap 2: NER         │   osoby, firmy, adresy, loginy
+│ engine/ner_masker   │
+└─────────┬───────────┘
+          ▼
+┌─────────────────────┐   to, czego NER nie zna: stanowiska, kwoty, identyfikacja pośrednia,
+│ Etap 3: LLM ≤ 4B    │   + wąskie przejście dla danych szczególnych (art. 9 RODO);
+│ engine/llm_masker   │   fragmenty ≤ 400 znaków, temperature 0.0, "format" = JSON Schema
 └─────────┬───────────┘   → model zwraca TYLKO {"entities": [...]}
           ▼
 ┌─────────────────────┐   Python podmienia encje w CAŁYM dokumencie:
@@ -185,7 +195,7 @@ zaczerniał każde „ul.” i „2009”. Na 6-stronicowym skanie było to 844 
           ▼
  tekst z tokenami ──► ChatGPT / Claude / … ──► odpowiedź z tokenami
                                                      │
-                         Etap 3: vault.restore() ◄───┘  → oryginalne dane
+                De-anonimizacja: vault.restore() ◄───┘  → oryginalne dane
 ```
 
 ### Dlaczego tak?
@@ -213,17 +223,21 @@ zaczerniał każde „ul.” i „2009”. Na 6-stronicowym skanie było to 844 
 ## Struktura
 
 ```
-app.py                  # Streamlit: zakładki Anonimizacja / De-anonimizacja + 4 przypadki testowe,
-                        # wczytywanie plików, podgląd surowego tekstu, pobieranie wyników
-engine/file_reader.py   # Odczyt plików: .txt .md .csv .log .json (UTF-8/cp1250), .pdf, .docx
+app.py                  # Streamlit: zakładki Anonimizacja / De-anonimizacja, przykłady,
+                        # wczytywanie plików, „zostaw jawnie”, pobieranie wyników
+.streamlit/config.toml  # tylko localhost, limit pliku 25 MB, bez telemetrii
+engine/file_reader.py   # Odczyt plików: .txt .md .csv .log .json (UTF-8/cp1250), .pdf, .docx + normalizacja
+engine/ocr.py           # OCR (Tesseract w PyMuPDF) tylko na obrazach w PDF, z pamięcią podręczną
 engine/redactor.py      # PDF z czarnymi paskami w miejscu danych wrażliwych
 engine/regex_masker.py  # Etap 1: wzorce + walidatory sum kontrolnych
-engine/llm_masker.py    # Etap 2: Ollama + schemat Pydantic + obsługa błędów
+engine/numerals.py      # Liczby zapisane słownie (telefon, kwota, PESEL, data)
+engine/ner_masker.py    # Etap 2: GLiNER2-PII (opcjonalny)
+engine/llm_masker.py    # Etap 3: Ollama + schemat Pydantic + obrona przed prompt injection
 engine/vault.py         # Sejf mapowań token <-> oryginał + eksport/import jako jeden token
-engine/pipeline.py      # Spina etapy, mierzy czas
-tests/test_pipeline.py  # 131 testów pipeline'u (LLM mockowany, Ollama niepotrzebna)
-tests/test_file_reader.py # 12 testów odczytu plików (m.in. strony PDF, SOFT HYPHEN)
-tests/test_redactor.py  # 14 testów zaczerniania (m.in. kolor pikseli pod paskiem)
+engine/pipeline.py      # Spina etapy, mierzy czas, decyduje o wstrzymaniu wyniku (fail-closed)
+eval/                   # Pomiar jakości: ręczne oznaczenia danych + run_eval.py (eval/README.md)
+przyklady/              # 8 testowych PDF-ów (generuj_pdf.py), m.in. skany, pieczątki, prompt injection
+tests/                  # pytest: LLM mockowany, Ollama niepotrzebna; marker „slow” = prawdziwy NER
 ```
 
 ## 📊 Metryki dla jury
@@ -251,7 +265,7 @@ Test umowy e-podpis zrobiono też na prawdziwym 3-stronicowym PDF-ie (Arial, my�
 | Krótka notatka (2 linie) w aplikacji, od kliknięcia do wyniku | **2,0 s** |
 | Najgorszy przypadek (model zapętlony) | ograniczony do ok. 11 s na fragment (wcześniej 180 s i utrata wyniku) |
 | RAM procesu Pythona (pipeline) | **~45 MB** (z interfejsem Streamlit ~75 MB) |
-| Testy jednostkowe | **164/164** zaliczonych w < 1 s, bez Ollamy |
+| Testy jednostkowe | **379/379** zaliczonych w ok. 17 s (z prawdziwym NER), bez Ollamy |
 
 **Co zostało wykryte:** wszystkie osoby we wszystkich przypadkach (także w odmianie: „Jana Kowalskiego”,
 „Piotra Wiśniewskiego”, „Katarzynę Zielińską”), wszystkie kwoty, adresy, PESEL, NIP, IBAN, telefony,
@@ -259,7 +273,7 @@ e-maile, IP oraz 4 sekrety w logu (hasło w JSON, Bearer, hasło w URL bazy, `ap
 
 **Co nie zostało wykryte lub zostało zamaskowane nadmiarowo** (model 3B):
 - login `tnowak` w logu nie został zamaskowany (z etapem NER jest już maskowany jako `[LOGIN_1]`);
-- w umowie e-podpis model oznaczył słowa „Pracownik” i „Spółka” jako encje, a „Toyota Corolla” jako firmę (nadmiarowo, ale bezpiecznie);
+- w umowie e-podpis model oznaczył słowa „Pracownik” i „Spółka” jako encje, a „Toyota Corolla” jako firmę (nadmiarowo, ale bezpiecznie; same nazwy ról jak „Pracownik” trafiają teraz do STANOWISKO zamiast OSOBA);
 - „Prezesa Zarządu” (odmienione) zostało widoczne, a „PREZES ZARZĄDU” na Karcie Podpisów zamaskowane jako `[STANOWISKO_1]`;
 - nazwa platformy „Autenti Sp. z o.o.” w pieczęci raz jest maskowana, a raz nie (zależy od fragmentu);
 - kod choroby `I48` i numer księgi `2025/00417` zostały zamaskowane, chociaż nie są danymi osobowymi (to bezpieczny rodzaj błędu).

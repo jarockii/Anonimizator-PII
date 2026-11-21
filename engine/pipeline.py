@@ -46,10 +46,6 @@ class AnonymizationResult:
     kept_entities: list[dict] = field(default_factory=list)
 
     @property
-    def total_ms(self) -> float:
-        return self.regex_ms + self.ner_ms + self.llm_ms
-
-    @property
     def needs_review(self) -> bool:
         return bool(self.review_reasons)
 
