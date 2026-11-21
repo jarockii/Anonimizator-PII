@@ -1,0 +1,62 @@
+{
+  "plik": "przyklady/3_skan_z_warstwa_ocr.pdf",
+  "opis": "Pełnomocnictwo – skan z warstwą OCR od skanera",
+  "dane": [
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Wojciech",
+        "Lis"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Agnieszce",
+        "Dudek"
+      ]
+    },
+    {
+      "kategoria": "PESEL",
+      "fragmenty": [
+        "79030802151"
+      ]
+    },
+    {
+      "kategoria": "PESEL",
+      "fragmenty": [
+        "90093035926"
+      ]
+    },
+    {
+      "kategoria": "ADRES",
+      "fragmenty": [
+        "Słonecznej 19"
+      ]
+    },
+    {
+      "kategoria": "EMAIL",
+      "fragmenty": [
+        "w.lis@skrzynka-test.pl"
+      ]
+    },
+    {
+      "kategoria": "TEL",
+      "fragmenty": [
+        "728 133 409"
+      ]
+    },
+    {
+      "kategoria": "DATA",
+      "fragmenty": [
+        "05.03.2025"
+      ]
+    }
+  ],
+  "zwykle_slowa": [
+    "PEŁNOMOCNICTWO",
+    "podatku dochodowego",
+    "2024",
+    "Urzędem Skarbowym"
+  ]
+}

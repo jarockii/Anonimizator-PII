@@ -1,0 +1,126 @@
+{
+  "plik": "przyklady/5_czat_potoczny.pdf",
+  "opis": "Czat: imiona małymi literami, zdrobnienia, liczby słownie",
+  "dane": [
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "gosia"
+      ],
+      "opis": "imię małymi literami i nick „Gosia N.”"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Kasia"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "zbyszek"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "kowal"
+      ],
+      "opis": "nazwisko-słowo"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "wilk"
+      ],
+      "opis": "„panią wilk”"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "mietek",
+        "żuraw"
+      ]
+    },
+    {
+      "kategoria": "TEL",
+      "fragmenty": [
+        "trzysta czterdzieści"
+      ],
+      "opis": "telefon słownie"
+    },
+    {
+      "kategoria": "ADRES",
+      "fragmenty": [
+        "Długiej 5"
+      ],
+      "opis": "adres bez „ul.”"
+    },
+    {
+      "kategoria": "EMAIL",
+      "fragmenty": [
+        "(at) wp"
+      ],
+      "opis": "e-mail „(at)”"
+    },
+    {
+      "kategoria": "ZDROWIE",
+      "fragmenty": [
+        "chemia",
+        "onkolog"
+      ],
+      "opis": "choroba mamy"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Bartka"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Zuzię"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Krzysiu"
+      ],
+      "opis": "wołacz"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Krzysztof",
+        "Bąk"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "rysiek",
+        "sowa"
+      ]
+    },
+    {
+      "kategoria": "TEL",
+      "fragmenty": [
+        "512 777 093"
+      ]
+    },
+    {
+      "kategoria": "IBAN",
+      "fragmenty": [
+        "1090 1014"
+      ]
+    }
+  ],
+  "zwykle_slowa": [
+    "hydraulika",
+    "księgowości",
+    "trzymam kciuki",
+    "bilety"
+  ]
+}

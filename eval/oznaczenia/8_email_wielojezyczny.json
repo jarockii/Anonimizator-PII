@@ -1,0 +1,111 @@
+{
+  "plik": "przyklady/8_email_wielojezyczny.pdf",
+  "opis": "E-mail PL/EN/DE: nazwisko w URL i loginie, angielska data",
+  "dane": [
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Teodor"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Wiśniewski"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Zbyszek"
+      ],
+      "opis": "podpis"
+    },
+    {
+      "kategoria": "PROFIL",
+      "fragmenty": [
+        "zbigniew-lukaszewicz"
+      ]
+    },
+    {
+      "kategoria": "LOGIN",
+      "fragmenty": [
+        "zbych.lukaszewicz"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Becker"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Hannah"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Ingrid"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Schröder"
+      ],
+      "opis": "nazwisko panieńskie „née”"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Lukas"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Ola"
+      ],
+      "opis": "zdrobnienie w cudzysłowie"
+    },
+    {
+      "kategoria": "DATA",
+      "fragmenty": [
+        "May 14th, 1961"
+      ]
+    },
+    {
+      "kategoria": "IBAN",
+      "fragmenty": [
+        "DE89 3704"
+      ]
+    },
+    {
+      "kategoria": "TEL",
+      "fragmenty": [
+        "853-12-40"
+      ]
+    },
+    {
+      "kategoria": "EMAIL",
+      "fragmenty": [
+        "biuro@lex-poznan.example"
+      ]
+    },
+    {
+      "kategoria": "KWOTA",
+      "fragmenty": [
+        "EUR 2.400"
+      ]
+    }
+  ],
+  "zwykle_slowa": [
+    "Dear",
+    "insurer",
+    "power of attorney",
+    "Kind regards"
+  ]
+}

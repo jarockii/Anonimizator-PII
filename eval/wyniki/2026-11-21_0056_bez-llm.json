@@ -1,0 +1,47 @@
+{
+ "konfiguracja": "model=— · NER=nie · LLM=nie · przebiegi=1",
+ "dokumenty": [
+  {
+   "nazwa": "3_skan_z_warstwa_ocr",
+   "opis": "Pełnomocnictwo – skan z warstwą OCR od skanera",
+   "danych": 8,
+   "wycieki_srednio": 2.0,
+   "wycieki": {
+    "Wojciech / Lis": 1,
+    "Agnieszce / Dudek": 1
+   },
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 0.0,
+   "do_sprawdzenia": 0,
+   "etapy": {},
+   "brakujace_fragmenty": []
+  }
+ ],
+ "kategorie": {
+  "ADRES": {
+   "ukryto": 1,
+   "razem": 1
+  },
+  "DATA": {
+   "ukryto": 1,
+   "razem": 1
+  },
+  "EMAIL": {
+   "ukryto": 1,
+   "razem": 1
+  },
+  "OSOBA": {
+   "ukryto": 0,
+   "razem": 2
+  },
+  "PESEL": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "TEL": {
+   "ukryto": 1,
+   "razem": 1
+  }
+ }
+}

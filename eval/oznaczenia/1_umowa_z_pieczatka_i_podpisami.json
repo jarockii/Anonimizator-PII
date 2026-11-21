@@ -1,0 +1,133 @@
+{
+  "plik": "przyklady/1_umowa_z_pieczatka_i_podpisami.pdf",
+  "opis": "Umowa najmu: tekst + pieczątka (OCR), podpisy, logo",
+  "dane": [
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Grzegorza",
+        "Wróblewskiego"
+      ],
+      "opis": "prezes w dopełniaczu"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Grzegorz",
+        "Wróblewski"
+      ],
+      "opis": "nazwisko na pieczątce (OCR)"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Małgorzata",
+        "Szczepańska"
+      ]
+    },
+    {
+      "kategoria": "FIRMA",
+      "fragmenty": [
+        "Bursztyn"
+      ],
+      "opis": "firma (także WIELKIMI na pieczątce i w logo)"
+    },
+    {
+      "kategoria": "ADRES",
+      "fragmenty": [
+        "Portowej 14"
+      ]
+    },
+    {
+      "kategoria": "ADRES",
+      "fragmenty": [
+        "Portowa 14"
+      ],
+      "opis": "adres na pieczątce (OCR)"
+    },
+    {
+      "kategoria": "ADRES",
+      "fragmenty": [
+        "Lipowa 7/3"
+      ]
+    },
+    {
+      "kategoria": "ADRES",
+      "fragmenty": [
+        "Morskiej 112/4"
+      ]
+    },
+    {
+      "kategoria": "NIP",
+      "fragmenty": [
+        "917-280-56-97"
+      ]
+    },
+    {
+      "kategoria": "REGON",
+      "fragmenty": [
+        "316610136"
+      ]
+    },
+    {
+      "kategoria": "PESEL",
+      "fragmenty": [
+        "87062364800"
+      ]
+    },
+    {
+      "kategoria": "TEL",
+      "fragmenty": [
+        "604 512 377"
+      ]
+    },
+    {
+      "kategoria": "EMAIL",
+      "fragmenty": [
+        "m.szczepanska@pocztex-test.pl"
+      ]
+    },
+    {
+      "kategoria": "KWOTA",
+      "fragmenty": [
+        "3 450,00"
+      ]
+    },
+    {
+      "kategoria": "KWOTA",
+      "fragmenty": [
+        "6 900 zł"
+      ]
+    },
+    {
+      "kategoria": "IBAN",
+      "fragmenty": [
+        "PL10 1090"
+      ]
+    },
+    {
+      "kategoria": "DATA",
+      "fragmenty": [
+        "03.02.2025"
+      ]
+    },
+    {
+      "kategoria": "DATA",
+      "fragmenty": [
+        "31.01.2027"
+      ]
+    }
+  ],
+  "zwykle_slowa": [
+    "UMOWA NAJMU",
+    "§1",
+    "netto",
+    "NIP",
+    "tel.",
+    "e-mail",
+    "Kodeksu cywilnego",
+    "64 m2",
+    "Najemcy",
+    "Wynajmujący"
+  ]
+}
