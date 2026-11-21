@@ -43,6 +43,17 @@ assert set(KEEP_OPTIONS) == KEEPABLE_CATEGORIES, "KEEP_OPTIONS musi odpowiadać 
 
 st.set_page_config(page_title="Lokalny Anonimizator PII", page_icon="🛡️", layout="wide")
 
+# Przycisk „Przykłady” obok pola pliku ma mieć tę samą wysokość co pole
+# (pomiar w przeglądarce: pole 68 px, zwykły przycisk 40 px). Ta sama
+# minimalna wysokość dla obu – pole przy wąskim oknie i tak może urosnąć.
+st.markdown(
+    """<style>
+    [data-testid="stFileUploaderDropzone"] { min-height: 4.25rem; }
+    .st-key-examples_box [data-testid="stPopoverButton"] { min-height: 4.25rem; }
+    </style>""",
+    unsafe_allow_html=True,
+)
+
 # --- Trudne przypadki testowe ----------------------------------------------
 # Celowo zawierają: odmianę nazwisk, różne formaty numerów, dane „ukryte”
 # w logach i liczby, które NIE są danymi osobowymi (pułapki na false positive).
@@ -341,8 +352,11 @@ tab_mask, tab_restore = st.tabs(["1️⃣ Anonimizacja", "2️⃣ De-anonimizacj
 # --- Zakładka 1: anonimizacja -------------------------------------------------
 with tab_mask:
     # Wejście: plik albo przykład w jednym rzędzie (przykłady w menu, żeby
-    # cztery długie przyciski nie zajmowały całej szerokości).
-    col_file, col_examples = st.columns([4, 1], vertical_alignment="bottom")
+    # cztery długie przyciski nie zajmowały całej szerokości). Etykieta pola
+    # jest ukryta – lista rozszerzeń i tak widnieje w samym polu – a oba
+    # elementy są wyrównane do GÓRY: po wgraniu pliku pod polem pojawia się
+    # jego nazwa i wyrównanie do dołu rozjeżdżało przycisk.
+    col_file, col_examples = st.columns([4, 1], vertical_alignment="top")
     with col_file:
         st.file_uploader(
             f"Wczytaj plik ({', '.join(SUPPORTED_EXTENSIONS)})",
@@ -350,8 +364,9 @@ with tab_mask:
             key="input_file",
             on_change=load_uploaded_file,
             args=("input_file", "input_text"),
+            label_visibility="collapsed",
         )
-    with col_examples:
+    with col_examples, st.container(key="examples_box"):
         with st.popover("🧪 Przykłady", width="stretch"):
             st.caption("Trudne przypadki testowe")
             for name in TEST_CASES:
