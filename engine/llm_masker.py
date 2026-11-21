@@ -579,6 +579,42 @@ _RELATION_HINT = re.compile(
 )
 
 
+# Nazwy ról w umowach i dokumentach (rdzenie – dowolna odmiana i wielkość liter).
+# „Pracownik”, „Najemcy”, „POŻYCZKOBIORCA” to nie imię i nazwisko, tylko funkcja.
+_ROLE_WORD = re.compile(
+    r"(?i)(?:pracowni|pracodawc|najemc|wynajmując|wynajmujący|zleceniodawc|zleceniobiorc"
+    r"|pożyczkodawc|pożyczkobiorc|kredytodawc|kredytobiorc|kupując|sprzedając|sprzedawc"
+    r"|nabywc|zamawiając|wykonawc|pełnomocni|mocodawc|wiceprezes|prezes|dyrektor|kierowni"
+    r"|członk|członek|zarząd|prokurent|księgow|specjalist|stażyst|operator|lekarz|lekark"
+    r"|pacjent|klient|właściciel|inwestor|dostawc|odbiorc|kontrahent|wnioskodawc|uczestni"
+    r"|podpisując|użytkowni|ubezpieczon|ubezpieczyciel|poszkodowan|świadk|notariusz|radc"
+    r"|adwokat|komornik|kurator|opiekun|przedstawiciel|reprezentant)\w*"
+)
+# Zwroty grzecznościowe – same w sobie nie są danymi osobowymi.
+_HONORIFICS = {"pan", "pani", "pana", "panu", "panem", "panią", "państwo", "państwa"}
+
+
+def role_category(tag: str, value: str) -> str | None:
+    """Poprawia kategorię „osoby”, która jest w rzeczywistości rolą.
+
+    - same nazwy ról („Pracownik”, „Najemcy”, „PREZES ZARZĄDU”) -> STANOWISKO,
+      dzięki czemu przełącznik „zostaw jawnie: stanowiska” je odsłania,
+    - same zwroty grzecznościowe („Pani”) -> None (nie maskujemy),
+    - wszystko inne bez zmian. Fragment z choćby jednym słowem spoza listy
+      („Pracownik Jan Kowalski”) zostaje OSOBĄ – przy wątpliwości maskujemy.
+    """
+    if tag != "OSOBA":
+        return tag
+    words = [w for w in re.findall(r"[^\W\d_]+", value)]
+    if not words:
+        return tag
+    if all(w.casefold() in _HONORIFICS for w in words):
+        return None
+    if all(w.casefold() in _HONORIFICS or _ROLE_WORD.fullmatch(w) for w in words):
+        return "STANOWISKO"
+    return tag
+
+
 def is_plausible(tag: str, value: str) -> bool:
     """Proste reguły sensu dla kategorii – odsiewają oczywiste pomyłki modelu.
 
@@ -625,9 +661,10 @@ def apply_entities(text: str, entities: list, vault: Vault,
         # Model czasem zwraca nasze własne tokeny – pomijamy je.
         if "[" in original or "]" in original or BARE_TOKEN.fullmatch(original):
             continue
-        if not is_plausible(entity.tag, original):
+        tag = role_category(entity.tag, original)
+        if tag is None or not is_plausible(tag, original):
             continue
-        if entity.tag == "OSOBA":
+        if tag == "OSOBA":
             # Każda odmieniona forma dostaje własny token, żeby
             # de-anonimizacja przywróciła tekst co do litery.
             forms = find_person_forms(text, original)
@@ -637,11 +674,11 @@ def apply_entities(text: str, entities: list, vault: Vault,
             if not forms and original.casefold() in folded_text:
                 forms = [original]
             for form in forms:
-                candidates.setdefault(form, entity.tag)
+                candidates.setdefault(form, tag)
         # Ochrona przed halucynacją: encja musi istnieć w tekście (bez
         # względu na wielkość liter – „LIVERI” i „Liveri” to ta sama nazwa).
         elif original.casefold() in folded_text:
-            candidates.setdefault(original, entity.tag)
+            candidates.setdefault(original, tag)
 
     # Najdłuższe najpierw: „Jan Kowalski” musi zostać podmieniony przed „Jan”,
     # inaczej zostałby „[OSOBA_2] Kowalski”.

@@ -84,6 +84,38 @@ def test_several_categories_at_once(fake_llm):
     assert "Kowalski" not in result.masked_text
 
 
+@pytest.mark.parametrize("value, expected", [
+    ("Pracownik", "STANOWISKO"), ("PRACOWNIK", "STANOWISKO"), ("Pracownikowi", "STANOWISKO"),
+    ("Najemcy", "STANOWISKO"), ("POŻYCZKOBIORCA", "STANOWISKO"), ("Prezes Zarządu", "STANOWISKO"),
+    ("Pani Pracownik", "STANOWISKO"),
+    ("Pracownik Jan Kowalski", "OSOBA"),          # z imieniem i nazwiskiem – nadal osoba
+    ("PAWEŁ ZIELIŃSKI", "OSOBA"), ("Świadek Jehowy", "OSOBA"),
+    ("Pani", None), ("Panu", None),               # sam zwrot grzecznościowy to nie dane
+])
+def test_role_words_are_positions_not_people(value, expected):
+    assert llm_masker.role_category("OSOBA", value) == expected
+
+
+def test_kept_positions_include_pracownik_found_by_ner(monkeypatch):
+    # Zgłoszony przypadek: NER oznaczał „Pracownik” jako osobę, więc
+    # „zostaw jawnie: stanowiska” go nie odsłaniało.
+    from engine import ner_masker
+
+    class FakeNer:
+        def extract_entities(self, text, labels, threshold, include_confidence):
+            return {"entities": {"person": [
+                {"text": t, "confidence": 0.9} for t in ("Pracownik", "Paweł Zieliński")
+                if t in text]}}
+
+    monkeypatch.setattr(ner_masker, "load_model", lambda: FakeNer())
+    monkeypatch.setattr(llm_masker, "_detect_in_chunk", lambda *a, **k: [])
+    text = "Pracownik Paweł Zieliński odpowiada do kwoty 500 zł. Pracownik zwraca auto."
+    masked = anonymize(text, Vault(), use_ner=True).masked_text
+    assert masked.count("[STANOWISKO_1]") == 2 and "[OSOBA_1]" in masked
+    kept = anonymize(text, Vault(), use_ner=True, keep_categories=["STANOWISKO"]).masked_text
+    assert kept == "Pracownik [OSOBA_1] odpowiada do kwoty [KWOTA_1]. Pracownik zwraca auto."
+
+
 @pytest.mark.parametrize("category", ["OSOBA", "PESEL", "ADRES", "WRAZLIWE", "POSREDNI", "SECRET"])
 def test_identifiers_can_never_be_kept(category):
     assert category not in KEEPABLE_CATEGORIES
