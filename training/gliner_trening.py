@@ -8,11 +8,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from engine import ner_masker  # noqa: E402
-
 DANE = ROOT / "training" / "dane"
 LORA = ROOT / "modele" / "gliner-pl-lora"     # robocze nakładki z treningu
 WYNIK = ROOT / "modele" / "gliner-pl"         # gotowy, scalony model
+# Zawsze trenujemy od ORYGINAŁU, nie od ner_masker.NER_MODEL: ta zmienna czyta
+# ANONIMIZATOR_NER_MODEL i po „export …=modele/gliner-pl-v3” trening ruszyłby od
+# modelu już dotrenowanego – a nakładka nie pasowałaby potem do oryginału.
+ORYGINAL = "fastino/gliner2-privacy-filter-PII-multi"
 
 
 def main():
@@ -34,10 +36,10 @@ def main():
     # Importy ciężkich bibliotek dopiero tutaj – błąd w argumentach wyjdzie od razu.
     from gliner2 import GLiNER2
     from gliner2.training.trainer import ExtractorTrainer, TrainingConfig
-    from peft import PeftModel
+    from scal_nakladke import scal
 
-    print(f"1/3 Wczytuję oryginalny model: {ner_masker.NER_MODEL}")
-    model = GLiNER2.from_pretrained(ner_masker.NER_MODEL)
+    print(f"1/3 Wczytuję oryginalny model: {ORYGINAL}")
+    model = GLiNER2.from_pretrained(ORYGINAL)
 
     config = TrainingConfig(
         output_dir=str(lora_dir),
@@ -70,9 +72,7 @@ def main():
     if not najlepsza.exists():
         najlepsza = lora_dir / "final"
     print(f"3/3 Scalam nakładkę {najlepsza.relative_to(ROOT)} z modelem i zapisuję…")
-    baza = GLiNER2.from_pretrained(ner_masker.NER_MODEL)
-    scalony = PeftModel.from_pretrained(baza, str(najlepsza)).merge_and_unload()
-    scalony.save_pretrained(str(wynik_dir))
+    scal(najlepsza, wynik_dir)
     print(f"\nModel zapisany w {wynik_dir.relative_to(ROOT)}")
     print("Pomiar PO treningu:")
     print(f"  ANONIMIZATOR_NER_MODEL={wynik_dir.relative_to(ROOT)} python eval/szara_strefa.py --nazwa po")
