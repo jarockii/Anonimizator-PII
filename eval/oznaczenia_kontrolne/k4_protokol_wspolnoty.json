@@ -1,0 +1,101 @@
+{
+  "plik": "przyklady/kontrolne/k4_protokol_wspolnoty.pdf",
+  "opis": "Protokół zebrania wspólnoty: potocznie, zdrobnienia, identyfikacja pośrednia, telefon słownie",
+  "dane": [
+    {
+      "kategoria": "ADRES",
+      "fragmenty": [
+        "Jaskółcza 3"
+      ],
+      "opis": "adres w nazwie wspólnoty"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Grażyna",
+        "Pleban"
+      ]
+    },
+    {
+      "kategoria": "POSREDNI",
+      "fragmenty": [
+        "czerwoną taksówką"
+      ],
+      "opis": "pan z czwórki, jeździ czerwoną taksówką"
+    },
+    {
+      "kategoria": "REJESTRACJA",
+      "fragmenty": [
+        "SPS 4K21"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Zdzichu"
+      ],
+      "opis": "zdrobnienie"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Wiesia",
+        "Dziedzic"
+      ],
+      "opis": "zdrobnienie + nazwisko"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Wiesława"
+      ],
+      "opis": "protokolantka"
+    },
+    {
+      "kategoria": "ZDROWIE",
+      "fragmenty": [
+        "depresję"
+      ]
+    },
+    {
+      "kategoria": "TEL",
+      "fragmenty": [
+        "pięćset trzydzieści jeden"
+      ],
+      "opis": "telefon zapisany słownie"
+    },
+    {
+      "kategoria": "EMAIL",
+      "fragmenty": [
+        "wspolnota.jaskolcza3"
+      ],
+      "opis": "e-mail „(at) … kropka”"
+    },
+    {
+      "kategoria": "KW",
+      "fragmenty": [
+        "KA1P/00067213/4"
+      ]
+    },
+    {
+      "kategoria": "DZIALKA",
+      "fragmenty": [
+        "418/7"
+      ]
+    },
+    {
+      "kategoria": "POSREDNI",
+      "fragmenty": [
+        "jedynej apteki"
+      ],
+      "opis": "sąsiad – właściciel jedynej apteki"
+    }
+  ],
+  "zwykle_slowa": [
+    "Protokół",
+    "zebrania",
+    "Zarząd",
+    "świetlicy",
+    "trawniku"
+  ]
+}

@@ -51,11 +51,12 @@ def test_score_over_masking_and_kept_categories():
 
 
 ANNOTATIONS = load_annotations(ROOT / "eval" / "oznaczenia", ROOT)
+CONTROL = load_annotations(ROOT / "eval" / "oznaczenia_kontrolne", ROOT)
 
 
 def test_item_labels_are_unique_per_document():
     # Wspólny opis („celownik”) zlewał dwie pozycje w jedną w liczniku wycieków.
-    for annotation in ANNOTATIONS:
+    for annotation in ANNOTATIONS + CONTROL:
         labels = [item.label for item in annotation.items]
         assert len(labels) == len(set(labels)), annotation.name
 
@@ -65,7 +66,22 @@ def test_every_sample_pdf_is_annotated():
     assert annotated == {p.name for p in (ROOT / "przyklady").glob("*.pdf")}
 
 
-@pytest.mark.parametrize("annotation", ANNOTATIONS, ids=lambda a: a.name[:2])
+def test_every_control_document_is_annotated():
+    documents = {p.name for p in (ROOT / "przyklady" / "kontrolne").iterdir()
+                 if p.suffix in (".pdf", ".docx")}
+    assert {a.path.name for a in CONTROL} == documents and len(documents) >= 4
+
+
+def test_control_set_shares_no_names_with_tuning_set():
+    """Zestaw kontrolny ma być NIEWIDZIANY: żadne słowo z jego osób i adresów
+    nie może występować w oznaczeniach zestawu, na którym stroiliśmy."""
+    def words(annotations, categories=("OSOBA", "ADRES")):
+        return {w.casefold() for a in annotations for item in a.items if item.category in categories
+                for fragment in item.fragments for w in fragment.split() if not w.isdigit()}
+    assert words(CONTROL) & words(ANNOTATIONS) == set()
+
+
+@pytest.mark.parametrize("annotation", ANNOTATIONS + CONTROL, ids=lambda a: a.name[:2])
 def test_annotations_match_document_text(annotation):
     """Literówka w oznaczeniu = dana „zawsze ukryta” – zawyżony wynik pomiaru."""
     if not ocr.ocr_available():

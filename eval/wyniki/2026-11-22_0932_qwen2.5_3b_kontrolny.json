@@ -1,0 +1,183 @@
+{
+ "konfiguracja": "model=qwen2.5:3b · NER=tak · LLM=tak · przebiegi=2 · zestaw=kontrolny · NER-model=gliner-pl-v3",
+ "dokumenty": [
+  {
+   "nazwa": "k1_wyciag_bankowy_znak_wodny",
+   "opis": "Wyciąg bankowy: tabela operacji, nazwiska w opisach przelewów, ukośny znak wodny",
+   "danych": 12,
+   "wycieki_srednio": 2.0,
+   "wycieki": {
+    "HYDRO-TECH (pracodawca)": 2,
+    "KH/2019/00731 (numer kredytu hipotecznego)": 2
+   },
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 33.0,
+   "do_sprawdzenia": 0,
+   "etapy": {
+    "Hieronim / Pstrąg (posiadacz rachunku)": "N",
+    "Antoś (dziecko, zdrobnienie w opisie opłaty)": "N",
+    "Oksana / Melnyk (odbiorca przelewu)": "N",
+    "Celina / Krzemień (nadawca przelewu)": "N",
+    "Zdzisław / Wrona (wpłata gotówkowa, nazwisko = rzeczownik)": "N",
+    "Wrzosowa 14/3": "R",
+    "Bielskiej 9/2 (lokal w opisie przelewu, dopełniacz)": "R",
+    "PL82 1940 1234 2780 5504 0645 8422": "R",
+    "512 784 903 (BLIK na telefon)": "R",
+    "HYDRO-TECH (pracodawca)": "✗",
+    "188-526-91-35 (NIP pracodawcy)": "R",
+    "KH/2019/00731 (numer kredytu hipotecznego)": "✗"
+   },
+   "brakujace_fragmenty": []
+  },
+  {
+   "nazwa": "k2_wniosek_ze_skanem_dowodu",
+   "opis": "Wniosek .docx: tabela, dane o zdrowiu i zdjęcie dowodu jako obraz (OCR)",
+   "danych": 11,
+   "wycieki_srednio": 1.0,
+   "wycieki": {
+    "znacznym stopniu niepełnosprawności": 2
+   },
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 20.1,
+   "do_sprawdzenia": 0,
+   "etapy": {
+    "Teodora / Hryniewicz (w tabeli i na obrazie dowodu (WIELKIMI))": "N",
+    "71110423506 (w tabeli i na obrazie)": "R",
+    "Juszczyna 212 (adres wiejski)": "R",
+    "609 118 427": "R",
+    "t.hryniewicz71@skrzynka-kontrolna.pl": "R",
+    "EDY700312 (tylko na obrazie dowodu)": "R",
+    "04.11.1971 (data urodzenia, tylko na obrazie)": "R",
+    "stwardnienie rozsiane": "L",
+    "znacznym stopniu niepełnosprawności": "✗",
+    "05-R (symbol przyczyny niepełnosprawności)": "L",
+    "jedynym fizjoterapeutą (syn – jedyny fizjoterapeuta w przychodni)": "L"
+   },
+   "brakujace_fragmenty": []
+  },
+  {
+   "nazwa": "k3_skan_wypisu_z_podpisem",
+   "opis": "Skan wypisu ze szpitala bez warstwy tekstowej (OCR), podpis odręczny lekarza",
+   "danych": 11,
+   "wycieki_srednio": 0.0,
+   "wycieki": {},
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 14.4,
+   "do_sprawdzenia": 0,
+   "etapy": {
+    "Marianna / Sołtys (nazwisko = rzeczownik (sołtys))": "N",
+    "48021746000": "R",
+    "Zawadka 47 (adres wiejski)": "R",
+    "02.02.2026 (przyjęcie do szpitala)": "R",
+    "11.02.2026 (wypis)": "R",
+    "obturacyjnej choroby płuc": "L",
+    "cukrzyca typu 2": "L",
+    "niewydolność serca": "L",
+    "Ignacy / Lipiec (nazwisko = nazwa miesiąca)": "N",
+    "Radosław / Kępka": "N",
+    "sołtyska wsi (córka – sołtyska wsi Zawadka)": "N"
+   },
+   "brakujace_fragmenty": []
+  },
+  {
+   "nazwa": "k4_protokol_wspolnoty",
+   "opis": "Protokół zebrania wspólnoty: potocznie, zdrobnienia, identyfikacja pośrednia, telefon słownie",
+   "danych": 13,
+   "wycieki_srednio": 3.0,
+   "wycieki": {
+    "czerwoną taksówką (pan z czwórki, jeździ czerwoną taksówką)": 2,
+    "Zdzichu (zdrobnienie)": 2,
+    "jedynej apteki (sąsiad – właściciel jedynej apteki)": 2
+   },
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 16.7,
+   "do_sprawdzenia": 0,
+   "etapy": {
+    "Jaskółcza 3 (adres w nazwie wspólnoty)": "N",
+    "Grażyna / Pleban": "N",
+    "czerwoną taksówką (pan z czwórki, jeździ czerwoną taksówką)": "✗",
+    "SPS 4K21": "R",
+    "Zdzichu (zdrobnienie)": "✗",
+    "Wiesia / Dziedzic (zdrobnienie + nazwisko)": "N",
+    "Wiesława (protokolantka)": "N",
+    "depresję": "L",
+    "pięćset trzydzieści jeden (telefon zapisany słownie)": "R",
+    "wspolnota.jaskolcza3 (e-mail „(at) … kropka”)": "R",
+    "KA1P/00067213/4": "R",
+    "418/7": "R",
+    "jedynej apteki (sąsiad – właściciel jedynej apteki)": "✗"
+   },
+   "brakujace_fragmenty": []
+  }
+ ],
+ "kategorie": {
+  "ADRES": {
+   "ukryto": 10,
+   "razem": 10
+  },
+  "DATA": {
+   "ukryto": 6,
+   "razem": 6
+  },
+  "DOC_ID": {
+   "ukryto": 0,
+   "razem": 2
+  },
+  "DOWOD": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "DZIALKA": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "EMAIL": {
+   "ukryto": 4,
+   "razem": 4
+  },
+  "FIRMA": {
+   "ukryto": 0,
+   "razem": 2
+  },
+  "IBAN": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "KW": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "NIP": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "OSOBA": {
+   "ukryto": 24,
+   "razem": 26
+  },
+  "PESEL": {
+   "ukryto": 4,
+   "razem": 4
+  },
+  "POSREDNI": {
+   "ukryto": 4,
+   "razem": 8
+  },
+  "REJESTRACJA": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "TEL": {
+   "ukryto": 6,
+   "razem": 6
+  },
+  "ZDROWIE": {
+   "ukryto": 12,
+   "razem": 14
+  }
+ }
+}

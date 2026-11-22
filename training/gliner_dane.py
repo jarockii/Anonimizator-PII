@@ -191,7 +191,9 @@ def bez_ogonkow(tekst):
 def slowa_z_testow():
     """Wszystkie słowa z oznaczeń w eval/ (małymi literami)."""
     slowa = set()
-    for adnotacja in load_annotations(ROOT / "eval" / "oznaczenia", ROOT):
+    # Także zestaw kontrolny – ma zostać niewidziany przez model.
+    for adnotacja in (load_annotations(ROOT / "eval" / "oznaczenia", ROOT)
+                      + load_annotations(ROOT / "eval" / "oznaczenia_kontrolne", ROOT)):
         for item in adnotacja.items:
             for fragment in item.fragments:
                 slowa.update(w.casefold() for w in re.findall(r"\w+", fragment))

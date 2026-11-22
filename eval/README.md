@@ -15,6 +15,19 @@ python eval/run_eval.py --zostaw ZDROWIE         # jak przełącznik „zostaw j
 
 Wynik: podsumowanie w konsoli oraz raport `eval/wyniki/<data>_<model>.md` (+ `.json`).
 
+## Zestaw kontrolny (`--zestaw kontrolny`)
+
+Na `przyklady/1–8` stroiliśmy reguły, progi i trening GLiNER-a, więc wynik na nich jest optymistyczny.
+Zestaw kontrolny ([`przyklady/kontrolne/`](../przyklady/kontrolne), oznaczenia w `oznaczenia_kontrolne/`)
+służy **tylko do pomiaru**: 4 dokumenty (wyciąg bankowy ze znakiem wodnym, wniosek `.docx` ze zdjęciem
+dowodu, skan wypisu ze szpitala z podpisem, potoczny protokół zebrania wspólnoty), 47 oznaczonych danych.
+
+- Żadne słowo z jego osób i adresów nie występuje w zestawie podstawowym (pilnuje tego test),
+  a `training/gliner_dane.py` wyklucza je z danych treningowych.
+- Dokumentów kontrolnych **nie poprawiamy pod wynik**. Gdy znajdziemy błąd, poprawiamy aplikację
+  i dodajemy podobny przypadek do zestawu podstawowego, a kontrolny zostaje bez zmian.
+  Nowe przypadki kontrolne dokładamy jako kolejne pliki (`python przyklady/kontrolne/generuj_kontrolne.py`).
+
 ## Co liczymy
 
 - **Wyciek** – którykolwiek fragment oznaczonej danej jest widoczny po anonimizacji jako całe
