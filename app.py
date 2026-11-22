@@ -21,7 +21,14 @@ from engine.llm_masker import (
     get_model_params,
     validate_ollama_url,
 )
-from engine.ner_masker import NER_PARAMS, ner_installed, preload_model as preload_ner_model
+from engine.ner_masker import (
+    NER_MODEL,
+    NER_PARAMS,
+    ORIGINAL_NER_MODEL,
+    ner_installed,
+    ner_model_label,
+    preload_model as preload_ner_model,
+)
 from engine.ocr import clear_cache as clear_ocr_cache
 from engine.ocr import ocr_available, ocr_pdf
 from engine.pipeline import KEEPABLE_CATEGORIES, anonymize, get_process_peak_ram_mb
@@ -268,7 +275,7 @@ with st.sidebar:
 
     use_ner = st.toggle("NER – osoby, firmy, adresy", value=ner_installed(),
                         disabled=not ner_installed(),
-                        help="GLiNER2-PII (~0,3 mld parametrów, CPU). Szybko zaznacza osoby, "
+                        help=f"{ner_model_label()} (~0,3 mld parametrów, CPU). Szybko zaznacza osoby, "
                              "firmy, adresy i loginy; LLM sprawdza tekst po nim.")
     use_llm = st.toggle("LLM – kontekst i dane szczególne", value=True,
                         help="Mały model w Ollamie: stanowiska, identyfikacja pośrednia, "
@@ -325,8 +332,14 @@ with status_box:
         lines.append(f"🟠 **{model}** nie jest pobrany – `ollama pull {model}`")
     else:
         lines.append(f"🟢 **LLM:** {model}")
-    lines.append("🟢 **NER:** GLiNER2-PII" if ner_installed()
-                 else "⚪ **NER:** brak (`pip install -r requirements-ner.txt`)")
+    if not ner_installed():
+        lines.append("⚪ **NER:** brak (`pip install -r requirements-ner.txt`)")
+    elif NER_MODEL == ORIGINAL_NER_MODEL:
+        # Polski v3 jest lepszy, ale trzeba go raz złożyć z nakładki LoRA.
+        lines.append("🟢 **NER:** GLiNER2-PII (oryginał) · polski v3: "
+                     "`python training/scal_nakladke.py`")
+    else:
+        lines.append(f"🟢 **NER:** {ner_model_label()}")
     lines.append("🟢 **OCR:** Tesseract" if ocr_available()
                  else "⚪ **OCR:** brak Tesseracta (pol)")
 

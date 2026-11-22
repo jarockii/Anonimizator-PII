@@ -48,17 +48,27 @@ na CPU – dlatego zostaje float32; NER można wyłączyć w pasku bocznym.
 Model był trenowany na EN/FR/ES/DE/IT/PT/NL, po polsku działa zero-shot. Progi pewności per etykieta
 (`engine/ner_masker.py`) są dobrane pomiarem.
 
-### Dotrenowany polski GLiNER (v3) – opcjonalny
+### Dotrenowany polski GLiNER (v3) – domyślny po złożeniu
 
 Model dotrenowaliśmy (LoRA, 1 epoka, CPU, ~3 min) na syntetycznych polskich zdaniach z
 [`training/gliner_dane.py`](training/gliner_dane.py): odmiana nazwisk we wszystkich przypadkach, osoby po tytule
 („dr”, „mgr inż.”) oraz przykłady negatywne (samo „PESEL”, „wew. 214”, nazwy miast, stanowiska). Żadne słowo
 z oznaczeń testowych nie trafia do treningu. W repo jest sama nakładka LoRA (~10 MB, [`nakladki/gliner-pl-v3`](nakladki/gliner-pl-v3)),
-a skrypt składa z niej gotowy model:
+a skrypt składa z niej gotowy model w `modele/gliner-pl-v3` (poza gitem, ~1,2 GB):
 
 ```bash
-python training/scal_nakladke.py                                  # raz: pobiera oryginał i nakłada LoRA
-ANONIMIZATOR_NER_MODEL=modele/gliner-pl-v3 streamlit run app.py
+python training/scal_nakladke.py      # raz: pobiera oryginał i nakłada LoRA
+streamlit run app.py                  # sam wykryje modele/gliner-pl-v3
+```
+
+Gdy `modele/gliner-pl-v3` istnieje, aplikacja (i `eval/run_eval.py`) **używa go domyślnie**. Pasek boczny pokazuje,
+który model NER działa. Inny model albo oryginał wymusza zmienna `ANONIMIZATOR_NER_MODEL`:
+
+```powershell
+$env:ANONIMIZATOR_NER_MODEL = "fastino/gliner2-privacy-filter-PII-multi"; streamlit run app.py   # Windows
+```
+```bash
+ANONIMIZATOR_NER_MODEL=fastino/gliner2-privacy-filter-PII-multi streamlit run app.py             # Linux/macOS
 ```
 
 | Model | Osoby (sam NER) | Zwykłe słowa zamaskowane | Regex + NER | Regex + NER + LLM |
@@ -68,8 +78,8 @@ ANONIMIZATOR_NER_MODEL=modele/gliner-pl-v3 streamlit run app.py
 
 Naprawione m.in. celowniki „Szewczence”, „Brzęczyszczykiewiczowi” i nazwisko po „née”. Pomiar:
 `eval/szara_strefa.py` i `eval/run_eval.py` ([wyniki](eval/wyniki)). Uwaga: to te same 8 dokumentów, na których
-porównywaliśmy kolejne wersje treningu, więc wynik może być nieco optymistyczny. Domyślnie aplikacja używa
-oryginalnego modelu.
+porównywaliśmy kolejne wersje treningu, więc wynik może być nieco optymistyczny. Bez złożonego modelu
+aplikacja używa oryginału. Liczba parametrów po scaleniu LoRA się nie zmienia (0,31 mld).
 
 ## 🧩 Podział pracy: Regex, NER, LLM
 

@@ -25,9 +25,36 @@ from pathlib import Path
 
 from engine.llm_masker import CHUNK_CHARS, split_into_chunks
 
-# Model z Hugging Face (Apache-2.0, safetensors). Można podmienić zmienną
-# środowiskową, np. na lokalny katalog z dotrenowanym modelem po polsku.
-NER_MODEL = os.environ.get("ANONIMIZATOR_NER_MODEL", "fastino/gliner2-privacy-filter-PII-multi")
+# Oryginał z Hugging Face (Apache-2.0, safetensors) i polska wersja v3: ten sam
+# model z nałożonym LoRA (nakladki/gliner-pl-v3), który składa
+# `python training/scal_nakladke.py`. Liczba parametrów po scaleniu jest ta sama.
+ORIGINAL_NER_MODEL = "fastino/gliner2-privacy-filter-PII-multi"
+POLISH_NER_MODEL = Path(__file__).resolve().parent.parent / "modele" / "gliner-pl-v3"
+
+
+def resolve_ner_model() -> str:
+    """Który model wczytać: zmienna ANONIMIZATOR_NER_MODEL > scalony polski v3 > oryginał.
+
+    Polski v3 jest domyślny, gdy tylko istnieje (pomiar: osoby 43/43 zamiast 40/43,
+    222/228 zamiast 218/228 danych). Oryginał można wymusić zmienną, np.
+    ANONIMIZATOR_NER_MODEL=fastino/gliner2-privacy-filter-PII-multi.
+    """
+    override = os.environ.get("ANONIMIZATOR_NER_MODEL", "").strip()
+    if override:
+        return override
+    if POLISH_NER_MODEL.is_dir() and any(POLISH_NER_MODEL.iterdir()):
+        return str(POLISH_NER_MODEL)
+    return ORIGINAL_NER_MODEL
+
+
+NER_MODEL = resolve_ner_model()
+
+
+def ner_model_label(model: str = NER_MODEL) -> str:
+    """Krótka nazwa do interfejsu: „GLiNER2-PII” albo nazwa katalogu („gliner-pl-v3”)."""
+    if model == ORIGINAL_NER_MODEL:
+        return "GLiNER2-PII"
+    return Path(model).name or model
 
 # Liczba parametrów GLiNER2-PII policzona z pliku model.safetensors (wszystkie
 # tensory). Na hackathonie limit to ≤ 4 mld – na wypadek, gdyby NER też liczono,

@@ -6,3 +6,6 @@
 # potem aplikacja ładuje go offline.
 -r requirements.txt
 gliner2[local]==2.1.0
+# Nakładka LoRA polskiego modelu (training/scal_nakladke.py, gliner_trening.py).
+# Wersja, w której zapisano nakladki/gliner-pl-v3 (adapter_config.json).
+peft==0.22.0

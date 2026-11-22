@@ -2,11 +2,12 @@
 
 Pełny model ma 1,2 GB (za dużo do gita), a nakładka LoRA z treningu tylko ~10 MB.
 Ten skrypt pobiera oryginalny model z Hugging Face, nakłada na niego nakładkę
-z repo i zapisuje scalony model, który aplikacja wczytuje przez ANONIMIZATOR_NER_MODEL.
+z repo i zapisuje scalony model w modele/gliner-pl-v3. Aplikacja używa go wtedy
+domyślnie (engine/ner_masker.resolve_ner_model); inny model wymusza ANONIMIZATOR_NER_MODEL.
 
 Uruchom z katalogu projektu (raz):
     python training/scal_nakladke.py
-    ANONIMIZATOR_NER_MODEL=modele/gliner-pl-v3 streamlit run app.py
+    streamlit run app.py
 Autor: Wiktor Jarocki
 """
 
@@ -51,8 +52,11 @@ def main():
         sys.exit(f"Brak nakładki w {nakladka}")
     print(f"Scalam {sciezka(nakladka)} z oryginalnym modelem (pierwsze pobranie ~1,2 GB)…")
     scal(nakladka, wyjscie)
-    print(f"\nModel zapisany w {sciezka(wyjscie)}. Uruchomienie aplikacji z nim:")
-    print(f"  ANONIMIZATOR_NER_MODEL={sciezka(wyjscie)} streamlit run app.py")
+    print(f"\nModel zapisany w {sciezka(wyjscie)}.")
+    if wyjscie == WYNIK:
+        print("Aplikacja użyje go automatycznie: streamlit run app.py")
+    else:
+        print(f"Uruchomienie aplikacji z nim: ANONIMIZATOR_NER_MODEL={sciezka(wyjscie)} streamlit run app.py")
 
 
 if __name__ == "__main__":

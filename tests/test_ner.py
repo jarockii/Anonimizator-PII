@@ -254,3 +254,36 @@ def test_real_gliner2_finds_polish_person():
     found = ner_masker.detect_entities(
         "Umowę podpisała Małgorzata Szczepańska, zam. ul. Lipowa 7/3, 80-180 Gdańsk.")
     assert any(e.tag == "OSOBA" and "Szczepańska" in e.original for e in found)
+
+
+# --- Wybór modelu: zmienna > złożony polski v3 > oryginał -------------------
+
+def test_polish_v3_is_default_when_merged(monkeypatch, tmp_path):
+    merged = tmp_path / "gliner-pl-v3"
+    merged.mkdir()
+    (merged / "config.json").write_text("{}")
+    monkeypatch.delenv("ANONIMIZATOR_NER_MODEL", raising=False)
+    monkeypatch.setattr(ner_masker, "POLISH_NER_MODEL", merged)
+    assert ner_masker.resolve_ner_model() == str(merged)
+    assert ner_masker.ner_model_label(str(merged)) == "gliner-pl-v3"
+
+
+def test_original_when_polish_model_missing_or_empty(monkeypatch, tmp_path):
+    monkeypatch.delenv("ANONIMIZATOR_NER_MODEL", raising=False)
+    monkeypatch.setattr(ner_masker, "POLISH_NER_MODEL", tmp_path / "brak")
+    assert ner_masker.resolve_ner_model() == ner_masker.ORIGINAL_NER_MODEL
+    (tmp_path / "pusty").mkdir()   # przerwane scalanie zostawia pusty katalog
+    monkeypatch.setattr(ner_masker, "POLISH_NER_MODEL", tmp_path / "pusty")
+    assert ner_masker.resolve_ner_model() == ner_masker.ORIGINAL_NER_MODEL
+    assert ner_masker.ner_model_label(ner_masker.ORIGINAL_NER_MODEL) == "GLiNER2-PII"
+
+
+def test_env_variable_overrides_polish_model(monkeypatch, tmp_path):
+    merged = tmp_path / "gliner-pl-v3"
+    merged.mkdir()
+    (merged / "config.json").write_text("{}")
+    monkeypatch.setattr(ner_masker, "POLISH_NER_MODEL", merged)
+    monkeypatch.setenv("ANONIMIZATOR_NER_MODEL", ner_masker.ORIGINAL_NER_MODEL)
+    assert ner_masker.resolve_ner_model() == ner_masker.ORIGINAL_NER_MODEL
+    monkeypatch.setenv("ANONIMIZATOR_NER_MODEL", "  ")   # pusta zmienna = brak
+    assert ner_masker.resolve_ner_model() == str(merged)
