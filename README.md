@@ -123,7 +123,7 @@ pokazuje sumę i ostrzega, gdy model jest za duży (np. qwen3.5:4b ma 4,21 mld �
 ## Pliki
 
 Tekst można wkleić, wybrać przypadek testowy albo wczytać plik: `.txt`, `.md`, `.csv`, `.log`, `.json`,
-`.pdf`, `.docx` (także tabele w Wordzie). Pliki są czytane w pamięci i nigdzie nie zapisywane.
+`.pdf`, `.docx` (także tabele i obrazy w Wordzie). Pliki są czytane w pamięci i nigdzie nie zapisywane.
 Odpowiedź AI też można wczytać z pliku. Zanonimizowany i przywrócony tekst można pobrać jako `.txt`.
 ### 🖼️ OCR tylko na obrazach
 
@@ -145,7 +145,20 @@ i potrzebuje tylko plików modeli, więc zamiast instalacji systemowej wystarczy
 `pol.traineddata` i `eng.traineddata` (z [tesseract-ocr/tessdata](https://github.com/tesseract-ocr/tessdata))
 do katalogu `tessdata/` w projekcie – bez uprawnień administratora. Bez modeli aplikacja działa dalej,
 ale gdy PDF ma obrazy z możliwym tekstem, wynik jest wstrzymany do ręcznego sprawdzenia.
-Obrazy w plikach `.docx` nie są jeszcze rozpoznawane.
+
+**Obrazy w Wordzie (`.docx`).** OCR przechodzi też po obrazach wstawionych w treść dokumentu
+(zdjęcie dowodu, zeskanowana pieczątka, zrzut ekranu – także w komórkach tabeli). Rozpoznany tekst
+trafia **zaraz po akapicie albo wierszu tabeli z obrazem**, więc model widzi go w kontekście
+(„Skan dowodu w załączniku:” + treść dowodu). Ten sam obraz wstawiony kilka razy (logo) jest rozpoznawany raz.
+Obraz nie ma tu rozmiaru na stronie, więc:
+
+- pomijane są obrazy mniejsze niż 40 × 16 px (punktory, ikony),
+- obrazy węższe niż 1600 px są powiększane (maks. ×3) – bez tego tekst 11 pt z obrazu 72 dpi
+  dawał „PESEL 92031802349” (zła cyfra, więc Regex go nie łapał), a z powiększeniem jest bezbłędny.
+
+Bez Tesseracta wynik dla `.docx` z obrazami jest wstrzymany do sprawdzenia, jak przy PDF. Obrazy
+w formatach wektorowych Worda (EMF/WMF) i obrazy w nagłówkach i stopkach nie są jeszcze odczytywane –
+EMF/WMF w treści wstrzymuje wynik jako błąd OCR.
 
 PDF jest czytany **strona po stronie** (`page.get_text("text", sort=True)`), więc tabele, kolumny
 i pieczęcie z Karty Podpisów (np. Autenti) wychodzą w kolejności czytania. Rozwijana sekcja
@@ -202,7 +215,7 @@ zaczerniał każde „ul.” i „2009”. Na 6-stronicowym skanie było to 844 
 ## Architektura hybrydowa
 
 ```
- tekst z PII (plik → engine/file_reader + engine/ocr: OCR tylko na obrazach PDF)
+ tekst z PII (plik → engine/file_reader + engine/ocr: OCR tylko na obrazach PDF i .docx)
      │
      ▼
 ┌─────────────────────┐   normalizacja Unicode (NFKC, znaki niewidoczne, myślniki)
@@ -260,7 +273,7 @@ app.py                  # Streamlit: zakładki Anonimizacja / De-anonimizacja, p
                         # wczytywanie plików, „zostaw jawnie”, pobieranie wyników
 .streamlit/config.toml  # tylko localhost, limit pliku 25 MB, bez telemetrii
 engine/file_reader.py   # Odczyt plików: .txt .md .csv .log .json (UTF-8/cp1250), .pdf, .docx + normalizacja
-engine/ocr.py           # OCR (Tesseract w PyMuPDF) tylko na obrazach w PDF, z pamięcią podręczną
+engine/ocr.py           # OCR (Tesseract w PyMuPDF) tylko na obrazach w PDF i .docx, z pamięcią podręczną
 engine/redactor.py      # PDF z czarnymi paskami w miejscu danych wrażliwych
 engine/regex_masker.py  # Etap 1: wzorce + walidatory sum kontrolnych
 engine/numerals.py      # Liczby zapisane słownie (telefon, kwota, PESEL, data)

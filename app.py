@@ -30,7 +30,7 @@ from engine.ner_masker import (
     preload_model as preload_ner_model,
 )
 from engine.ocr import clear_cache as clear_ocr_cache
-from engine.ocr import ocr_available, ocr_pdf
+from engine.ocr import ocr_available, ocr_docx, ocr_pdf
 from engine.pipeline import KEEPABLE_CATEGORIES, anonymize, get_process_peak_ram_mb
 from engine.redactor import page_count, redact_pdf, redact_text_to_pdf, render_preview
 from engine.vault import Vault, VaultTokenError
@@ -175,23 +175,27 @@ def load_uploaded_file(uploader_key: str, target_key: str) -> None:
         st.session_state.raw_pages = {"name": uploaded.name, "pages": pages}
         # Oryginalny PDF zachowujemy, żeby zaczernić dane W NIM (z zachowaniem
         # układu, logo, tabel), a nie w PDF-ie wygenerowanym z samego tekstu.
-        if uploaded.name.lower().endswith(".pdf"):
+        name = uploaded.name.lower()
+        if name.endswith(".pdf"):
             st.session_state.source_pdf = {"name": uploaded.name, "bytes": uploaded.getvalue()}
             # Wynik OCR jest już w pamięci (read_uploaded_pages go policzył).
             st.session_state.ocr_report = ocr_pdf(uploaded.getvalue())
         else:
             st.session_state.pop("source_pdf", None)
-            st.session_state.pop("ocr_report", None)
+            if name.endswith(".docx"):
+                st.session_state.ocr_report = ocr_docx(uploaded.getvalue())
+            else:
+                st.session_state.pop("ocr_report", None)
 
 
 def ocr_review_reasons() -> list[str]:
     """Powody wstrzymania wyniku związane z OCR (obrazy, których nie odczytano)."""
     report = st.session_state.get("ocr_report")
-    if report is None or "source_pdf" not in st.session_state:
+    if report is None:
         return []
     reasons = []
     if report.pending:
-        reasons.append(f"PDF zawiera obrazy z możliwym tekstem ({report.pending}), a OCR "
+        reasons.append(f"Plik zawiera obrazy z możliwym tekstem ({report.pending}), a OCR "
                        "jest niedostępny – dane na skanach i pieczątkach NIE zostały "
                        "sprawdzone. Zainstaluj Tesseract z językiem polskim.")
     if report.errors:

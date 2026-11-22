@@ -3,7 +3,7 @@
 Obsługujemy:
 - pliki tekstowe (.txt, .md, .csv, .log, .json) – bez dodatkowych bibliotek,
 - PDF (PyMuPDF) i Word .docx (python-docx) – najczęstsze formaty umów
-  i dokumentacji medycznej.
+  i dokumentacji medycznej. W obu tekst z obrazów odczytuje OCR (engine/ocr.py).
 
 Wszystko dzieje się lokalnie, w pamięci. Plik nie jest nigdzie zapisywany.
 """
@@ -115,20 +115,54 @@ def read_pdf_pages(data: bytes, ocr: bool = True) -> list[str]:
     return pages
 
 
-def read_docx(data: bytes) -> str:
+def read_docx(data: bytes, ocr: bool = True) -> str:
+    """Tekst dokumentu Word w kolejności czytania: akapity i tabele tak, jak
+    stoją w pliku, a tekst rozpoznany na obrazach (ocr=True) zaraz po akapicie
+    albo wierszu tabeli, w którym obraz jest wstawiony – model widzi go
+    w kontekście („Skan dowodu:” + treść dowodu).
+    """
     from docx import Document
+    from docx.oxml.ns import qn
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
 
     try:
         document = Document(io.BytesIO(data))
     except Exception as error:  # python-docx rzuca różne wyjątki dla złych plików
         raise FileReadError(f"Uszkodzony plik .docx: {error}") from error
 
-    lines = [paragraph.text for paragraph in document.paragraphs]
-    # Umowy często mają dane stron w tabelach – nie możemy ich pominąć.
-    for table in document.tables:
-        for row in table.rows:
-            lines.append(" | ".join(cell.text for cell in row.cells))
-    return "\n".join(lines).strip()
+    image_texts: dict[str, str] = {}
+    pending = 0
+    if ocr:
+        from engine.ocr import docx_image_parts, ocr_docx
+
+        report = ocr_docx(data)
+        image_texts, pending = report.image_texts, report.pending
+
+    def image_lines(element) -> list[str]:
+        if not image_texts:
+            return []
+        texts = (image_texts.get(str(part.partname), "")
+                 for part in docx_image_parts(element, document.part))
+        return [normalize_text(text).strip() for text in texts if text.strip()]
+
+    lines = []
+    for child in document.element.body.iterchildren():
+        if child.tag == qn("w:p"):
+            lines.append(Paragraph(child, document).text)
+            lines.extend(image_lines(child))
+        elif child.tag == qn("w:tbl"):
+            # Umowy często mają dane stron w tabelach – nie możemy ich pominąć.
+            for row in Table(child, document).rows:
+                lines.append(" | ".join(cell.text for cell in row.cells))
+                lines.extend(image_lines(row._tr))
+    text = "\n".join(lines).strip()
+    if not text and pending:
+        raise FileReadError(
+            "Dokument Word zawiera same obrazy, a OCR jest niedostępny. Zainstaluj Tesseract "
+            "z językiem polskim, żeby odczytać tekst z obrazów."
+        )
+    return text
 
 
 def read_uploaded_pages(filename: str, data: bytes) -> list[str]:

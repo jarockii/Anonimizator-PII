@@ -1,4 +1,4 @@
-"""OCR tylko tam, gdzie jest potrzebny: na obrazach osadzonych w PDF.
+"""OCR tylko tam, gdzie jest potrzebny: na obrazach osadzonych w PDF i .docx.
 
 Cały PDF przez OCR to strata czasu i RAM-u – zwykła umowa ma warstwę
 tekstową, a obrazy to co najwyżej pieczątka, podpis albo zeskanowany
@@ -18,9 +18,14 @@ załącznik. Dlatego:
 
 Słowa z OCR mają współrzędne na stronie, więc redaktor może wypalić na nich
 czarne paski tak samo jak na zwykłym tekście.
+
+Word (.docx) nie ma stron ani warstwy tekstowej na obrazach – OCR przechodzi
+po obrazach dokumentu (zdjęcie dowodu, zeskanowana pieczątka, zrzut ekranu),
+każdy różny obraz raz, a tekst trafia w miejsce obrazu (ocr_docx).
 """
 
 import hashlib
+import io
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -28,6 +33,8 @@ from functools import lru_cache
 from pathlib import Path
 
 import pymupdf
+from docx import Document
+from docx.oxml.ns import qn
 
 # Język Tesseracta. „pol” zna polskie znaki (ą, ę, ł…), „eng” dobrze czyta
 # e-maile, kody i identyfikatory – razem dają najlepszy wynik.
@@ -47,6 +54,15 @@ TEXT_LAYER_COVERAGE = 0.15
 # Wystarczy tyle słów w nim, żeby uznać, że skaner zrobił już OCR.
 BACKGROUND_SHARE = 0.5
 MIN_SCAN_LAYER_WORDS = 2
+# Obrazy w .docx nie mają rozmiaru na stronie, więc filtrujemy po pikselach:
+# 40 x 16 px to ok. 30 x 12 pt przy 96 dpi (jak MIN_IMAGE_* dla PDF).
+MIN_DOCX_IMAGE_PIXELS = (40, 16)
+# Zrzuty ekranu i małe zdjęcia mają za mało pikseli na literę dla Tesseracta
+# (lubi ok. 300 dpi) – węższe obrazy powiększamy do tej szerokości, max ×3.
+# Pomiar: tekst 11 pt jako obraz 72 dpi bez powiększenia dał „PESEL 92031802349”
+# (zła cyfra = Regex go nie złapie) i „Polna7,00.950”; z powiększeniem – bez błędów.
+DOCX_OCR_MIN_WIDTH = 1600
+DOCX_OCR_MAX_UPSCALE = 3
 # Ile ostatnich plików pamiętamy (wyniki zawierają dane wrażliwe – mało).
 CACHE_FILES = 4
 
@@ -71,6 +87,8 @@ class OcrReport:
     pending: int = 0           # wymagały OCR, ale Tesseract niedostępny
     errors: list[str] = field(default_factory=list)
     ocr_ms: float = 0.0
+    # Tylko .docx: obraz w pliku (np. „/word/media/image1.png”) -> rozpoznany tekst.
+    image_texts: dict[str, str] = field(default_factory=dict)
 
 
 class OcrUnavailableError(RuntimeError):
@@ -236,16 +254,106 @@ def ocr_document(document: pymupdf.Document) -> OcrReport:
     return report
 
 
+# --- Word (.docx) ----------------------------------------------------------
+
+# Obraz w treści dokumentu: <a:blip r:embed> (DrawingML, zwykłe „Wstaw obraz”)
+# albo <v:imagedata r:id> (VML – starsze pliki i obrazy z .doc).
+# (python-docx nie zna przestrzeni nazw VML, więc ta jest zapisana wprost.)
+_IMAGE_REFS = ((qn("a:blip"), qn("r:embed")),
+               ("{urn:schemas-microsoft-com:vml}imagedata", qn("r:id")))
+
+
+def docx_image_parts(element, part) -> list:
+    """Obrazy wstawione w danym fragmencie XML (akapit, wiersz tabeli, całe ciało)
+    w kolejności występowania – jako części pakietu .docx (mają .partname i .blob)."""
+    parts = []
+    for tag, attribute in _IMAGE_REFS:
+        for node in element.iter(tag):
+            rel_id = node.get(attribute)
+            target = part.related_parts.get(rel_id) if rel_id else None
+            if target is not None and hasattr(target, "blob"):
+                parts.append(target)
+    return parts
+
+
+def _prepare_image(blob: bytes) -> pymupdf.Pixmap:
+    """Obraz z pliku -> pixmapa RGB bez przezroczystości, w rozmiarze dobrym dla OCR.
+
+    RGB jak w _render(): w skali szarości pdfocr_tobytes() zwraca pusty tekst.
+    Formatów wektorowych Worda (EMF/WMF) PyMuPDF nie wczyta – wtedy wyjątek,
+    a plik trafia do ręcznego sprawdzenia (fail-closed).
+    """
+    pixmap = pymupdf.Pixmap(blob)
+    if pixmap.alpha:
+        pixmap = pymupdf.Pixmap(pixmap, 0)
+    if pixmap.colorspace is None or pixmap.colorspace.n != 3:
+        pixmap = pymupdf.Pixmap(pymupdf.csRGB, pixmap)
+    scale = min(DOCX_OCR_MAX_UPSCALE, max(1.0, DOCX_OCR_MIN_WIDTH / pixmap.width))
+    if pixmap.width * pixmap.height * scale ** 2 > MAX_OCR_PIXELS:
+        scale = (MAX_OCR_PIXELS / (pixmap.width * pixmap.height)) ** 0.5
+    if abs(scale - 1.0) > 0.05:
+        pixmap = pymupdf.Pixmap(pixmap, int(pixmap.width * scale), int(pixmap.height * scale), None)
+    return pixmap
+
+
+def _relative_to_text(words: list[RelativeWord]) -> str:
+    lines: dict[tuple[int, int], list[str]] = {}
+    for *_, text, block, line in words:
+        lines.setdefault((block, line), []).append(text)
+    return "\n".join(" ".join(parts) for parts in lines.values())
+
+
+def ocr_docx_document(document) -> OcrReport:
+    """OCR obrazów w otwartym dokumencie Word (bez pamięci podręcznej plików).
+
+    Tylko obrazy w treści (także w tabelach). Ten sam obraz wstawiony kilka
+    razy (logo) jest jedną częścią pakietu – rozpoznajemy go raz.
+    """
+    report = OcrReport()
+    start = time.perf_counter()
+    available = ocr_available()
+    for image in docx_image_parts(document.element.body, document.part):
+        report.images_total += 1
+        name = str(image.partname)
+        if name in report.image_texts:
+            report.images_reused += 1
+            continue
+        try:
+            pixmap = pymupdf.Pixmap(image.blob)
+            too_small = (pixmap.width < MIN_DOCX_IMAGE_PIXELS[0]
+                         or pixmap.height < MIN_DOCX_IMAGE_PIXELS[1])
+        except Exception:
+            too_small = False   # nieczytelny format – zgłosi go _prepare_image niżej
+        if too_small:
+            report.skipped_small += 1
+            report.image_texts[name] = ""
+            continue
+        if not available:
+            report.pending += 1
+            report.image_texts[name] = ""
+            continue
+        try:
+            words = run_tesseract(_prepare_image(image.blob))
+        except Exception as error:  # jeden zły obraz nie psuje całego pliku
+            report.errors.append(f"obraz {name.rsplit('/', 1)[-1]}: {error}")
+            report.image_texts[name] = ""
+            continue
+        report.images_ocr += 1
+        report.image_texts[name] = _relative_to_text(words)
+    report.ocr_ms = (time.perf_counter() - start) * 1000
+    return report
+
+
 _CACHE: "OrderedDict[str, OcrReport]" = OrderedDict()
 
 
-def ocr_pdf(pdf_bytes: bytes) -> OcrReport:
-    """OCR obrazów w PDF; wynik zapamiętany dla ostatnich CACHE_FILES plików."""
-    key = hashlib.sha256(pdf_bytes).hexdigest()
+def _cached(data: bytes, compute) -> OcrReport:
+    """Wynik OCR pliku zapamiętany dla ostatnich CACHE_FILES plików."""
+    key = hashlib.sha256(data).hexdigest()
     if key in _CACHE:
         _CACHE.move_to_end(key)
         return _CACHE[key]
-    report = ocr_document(pymupdf.open(stream=pdf_bytes, filetype="pdf"))
+    report = compute()
     if report.pending:
         # Brak Tesseracta – nie zapamiętujemy, żeby po jego instalacji
         # ten sam plik został rozpoznany.
@@ -254,6 +362,16 @@ def ocr_pdf(pdf_bytes: bytes) -> OcrReport:
     while len(_CACHE) > CACHE_FILES:
         _CACHE.popitem(last=False)
     return report
+
+
+def ocr_pdf(pdf_bytes: bytes) -> OcrReport:
+    """OCR obrazów w PDF; wynik zapamiętany dla ostatnich CACHE_FILES plików."""
+    return _cached(pdf_bytes, lambda: ocr_document(pymupdf.open(stream=pdf_bytes, filetype="pdf")))
+
+
+def ocr_docx(docx_bytes: bytes) -> OcrReport:
+    """OCR obrazów w .docx; wynik zapamiętany jak dla PDF."""
+    return _cached(docx_bytes, lambda: ocr_docx_document(Document(io.BytesIO(docx_bytes))))
 
 
 def clear_cache() -> None:
