@@ -27,6 +27,7 @@ import pymupdf
 
 from engine.file_reader import PAGE_BREAK, normalize_pdf_text
 from engine.ocr import OcrWord, ocr_pdf
+from engine import signatures
 
 # O ile zmniejszamy pasek od góry. 0 = pełna wysokość linii: przy 10%
 # nad paskiem wystawały kreski z „Ś”, „Ź”, „Ż” pisanych WIELKIMI literami
@@ -52,6 +53,8 @@ class RedactionResult:
     missing: list[str] = field(default_factory=list)   # wartości nieznalezione
     images: int = 0                                    # ile obrazów usunięto
     background_pages: int = 0                          # strony-skany (tło pominięte)
+    vector_signatures: int = 0                         # podpisy wektorowe (paski)
+    scan_signatures: int = 0                           # podpisy na skanach (przy „podpis”)
 
 
 def _clean_values(values: list[str]) -> list[str]:
@@ -262,6 +265,12 @@ def remove_images(page: pymupdf.Page) -> int:
     return len(rects)
 
 
+def _black(pixmap: pymupdf.Pixmap) -> tuple:
+    # Czarny = 0 w kanałach koloru; kanał alfa (jeśli jest) = 255,
+    # inaczej „czarny” piksel byłby przezroczysty.
+    return (0,) * (pixmap.n - 1) + (255,) if pixmap.alpha else (0,) * pixmap.n
+
+
 def burn_bars(pixmap: pymupdf.Pixmap, page: pymupdf.Page,
               rects: list[pymupdf.Rect], dpi: int) -> None:
     """Wypala czarne paski bezpośrednio w pikselach wyrenderowanej strony.
@@ -281,10 +290,7 @@ def burn_bars(pixmap: pymupdf.Pixmap, page: pymupdf.Page,
         bar = pymupdf.Rect(rect.x0, rect.y0 + rect.height * TOP_SHRINK, rect.x1, rect.y1)
         pixel_rect = (bar * matrix).irect & pixmap.irect
         if not pixel_rect.is_empty:
-            # Czarny = 0 w kanałach koloru; kanał alfa (jeśli jest) = 255,
-            # inaczej „czarny” piksel byłby przezroczysty.
-            black = (0,) * (pixmap.n - 1) + (255,) if pixmap.alpha else (0,) * pixmap.n
-            pixmap.set_rect(pixel_rect, black)
+            pixmap.set_rect(pixel_rect, _black(pixmap))
 
 
 def redact_pdf(
@@ -297,7 +303,9 @@ def redact_pdf(
     """Zaczernia wartości w istniejącym PDF i spłaszcza strony do obrazków.
 
     redact_images=True dodatkowo wycina wszystkie obrazy osadzone w PDF
-    (podpisy odręczne, pieczątki, kody QR, zdjęcia dowodu).
+    (podpisy odręczne, pieczątki, kody QR, zdjęcia dowodu), zaczernia podpisy
+    narysowane wektorowo, a na stronach-skanach – pismo odręczne przy słowie
+    „podpis” (engine/signatures.py).
     ocr=True: paski także na słowach rozpoznanych na obrazach (skan bez
     warstwy tekstowej, pieczątka). Wynik OCR jest brany z pamięci – ten sam
     plik był już rozpoznany przy odczycie tekstu.
@@ -310,12 +318,17 @@ def redact_pdf(
     bars = 0
     images = 0
     background_pages = 0
+    vector_signatures = scan_signatures = 0
 
     for page in source:
+        is_scan = False
+        signature_bars: list[pymupdf.Rect] = []
         if redact_images:
-            if split_page_images(page)[1]:
-                background_pages += 1
+            is_scan = bool(split_page_images(page)[1])
+            background_pages += is_scan
             images += remove_images(page)
+            signature_bars = signatures.find_vector_signatures(page)
+            vector_signatures += len(signature_bars)
 
         words = page_words(page)
         if page.number < len(ocr_words):
@@ -331,13 +344,25 @@ def redact_pdf(
         # Spłaszczenie: nowa strona zawiera TYLKO obrazek starej strony.
         # Tekst, metadane i ukryte warstwy oryginału nie przechodzą dalej.
         pixmap = page.get_pixmap(dpi=dpi)
-        burn_bars(pixmap, page, page_bars, dpi)
+        if is_scan:
+            # Na tym samym obrazie strony, PRZED paskami danych (czarne
+            # prostokąty liczyłyby się jako atrament). Tylko skany – na zwykłej
+            # stronie podpis to osobny obraz (wycięty wyżej) albo wektor.
+            # Surowe słowa (także „……” i „____”, które page_words pomija
+            # jako samą interpunkcję) – to też tekst, nie podpis.
+            scan_words = [(w[4], pymupdf.Rect(w[:4])) for w in page.get_text("words")]
+            if page.number < len(ocr_words):
+                scan_words += [(w.text, w.rect) for w in ocr_words[page.number]]
+            for rect in signatures.find_scan_signatures(pixmap, page.rect, scan_words):
+                pixmap.set_rect(rect, _black(pixmap))
+                scan_signatures += 1
+        burn_bars(pixmap, page, page_bars + signature_bars, dpi)
         new_page = output.new_page(width=page.rect.width, height=page.rect.height)
         new_page.insert_image(new_page.rect, pixmap=pixmap)
 
     missing = [v for v in unique_values if v not in found]
     return RedactionResult(output.tobytes(garbage=3, deflate=True), bars, missing,
-                           images, background_pages)
+                           images, background_pages, vector_signatures, scan_signatures)
 
 
 def render_preview(pdf_bytes: bytes, page_number: int = 0, dpi: int = 90) -> bytes:

@@ -506,7 +506,9 @@ with tab_mask:
                     value=True,
                     disabled=not from_source,
                     help="Wycina z PDF wszystkie osadzone obrazy (podpis, pieczęć, kod QR, "
-                         "logo) i zostawia w ich miejscu czarny prostokąt. Dotyczy wgranego PDF.",
+                         "logo) i zostawia w ich miejscu czarny prostokąt. Zaczernia też podpisy "
+                         "narysowane liniami, a na skanach – pismo odręczne przy słowie "
+                         "„podpis”. Dotyczy wgranego PDF.",
                 )
                 redacted = make_redacted_pdf(
                     redaction["source_pdf"], redaction["text"], redaction["values"], redact_images
@@ -516,6 +518,9 @@ with tab_mask:
                                    "w pliku nie ma tekstu, który dałoby się skopiować")
                     if redact_images:
                         source_info += f" · usuniętych obrazów: {redacted.images}"
+                        signature_count = redacted.vector_signatures + redacted.scan_signatures
+                        if signature_count:
+                            source_info += f" · podpisów odręcznych: {signature_count}"
                 else:
                     source_info = ("PDF z tekstu – w miejscu danych są tylko paski, "
                                    "prawdziwe wartości nie trafiły do pliku")
@@ -523,8 +528,8 @@ with tab_mask:
                 if from_source and redact_images and redacted.background_pages:
                     st.info(f"Stron będących skanem: {redacted.background_pages}. Obraz całej "
                             "strony nie jest zamazywany (strona byłaby czarna). Paski na tekście "
-                            "działają dzięki warstwie OCR, ale podpis odręczny WEWNĄTRZ skanu "
-                            "nie jest osobnym obrazem i nie zostanie wykryty.")
+                            "działają dzięki warstwie OCR, a podpis odręczny WEWNĄTRZ skanu jest "
+                            "zaczerniany tylko przy słowie „podpis” – sprawdź podgląd.")
                 if redacted.missing:
                     st.warning("Nie znaleziono w PDF (sprawdź ręcznie): "
                                + ", ".join(redacted.missing))

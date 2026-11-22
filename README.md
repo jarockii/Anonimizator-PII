@@ -195,13 +195,28 @@ Wartości, których nie udało się znaleźć w PDF, aplikacja wypisuje do ręcz
 adnotacja redakcyjna, a `apply_redactions(images=PDF_REDACT_IMAGE_REMOVE, text=PDF_REDACT_TEXT_NONE)`
 fizycznie usuwa go z pliku. Tekstu ten krok nie rusza, dlatego nie wraca błąd z przesuwaniem liter.
 Potem strona jest spłaszczana jak wcześniej, więc w wyniku każda strona to jeden obraz całej strony.
-Ograniczenie: podpis zapisany jako grafika wektorowa (linie), a nie obraz, nie jest wykrywany.
+
+**Podpisy wektorowe.** Podpis narysowany liniami (tablet, część platform e-podpisu, edytor PDF) nie jest
+obrazem, więc wycinanie obrazów go nie usuwało. [engine/signatures.py](engine/signatures.py) rozpoznaje go
+po kształcie ścieżek: ciągłe pociągnięcia z wieloma odcinkami, w większości ukośne, z powrotami pióra w lewo
+(pętle liter). Ramki tabel, podkreślenia, wykresy liniowe i kołowe oraz gęste kreskowanie nie spełniają tych
+warunków. Wykryty podpis dostaje pasek wypalony w pikselach. Koszt: 3–7 ms na stronę przykładowych PDF-ów,
+bez modelu. Ograniczenie: podpis zapisany jako **wypełniony** kontur liter jest pomijany, bo tak wyglądają też
+logo i wykresy.
 
 **Skany z warstwą OCR.** Obraz zajmujący co najmniej połowę strony to tło albo skan, a nie podpis,
 więc nie jest zamazywany. Wcześniej zeskanowane pismo (każda strona = obraz A4 300 dpi) wychodziło
 całkowicie czarne. Na takich stronach małe obrazy usuwamy trybem `PDF_REDACT_IMAGE_PIXELS`, bo tryb REMOVE
-skasowałby cały skan, którego dotyka. Paski na tekście działają dzięki warstwie OCR. Podpis odręczny
-**wewnątrz** skanu nie jest osobnym obrazem i nie zostanie wykryty.
+skasowałby cały skan, którego dotyka. Paski na tekście działają dzięki warstwie OCR.
+
+**Podpisy wewnątrz skanu.** Podpis na skanie nie jest osobnym obrazem ani ścieżką – to zwykłe piksele.
+Bez modelu i bez pobierania czegokolwiek: przy słowie „podpis” („Podpis:”, „(podpis)”, „Podpisy”, „signature”)
+z warstwy tekstowej skanu albo z OCR bierzemy okolicę, czyścimy w niej piksele rozpoznanego tekstu, linie
+do podpisu („……”, „____”) i drobne plamki, a to, co zostało ciemnego, to pismo odręczne i dostaje pasek.
+„Niżej podpisany” ani „podpisania” nie są kotwicą – to treść pisma. Działa tylko na stronach-skanach,
+na obrazie strony, który redaktor i tak renderuje: ok. 75 ms na stronę ze słowem „podpis”, bez niego ~0.
+Ograniczenie: podpis bez żadnego podpisu-etykiety w pobliżu (np. parafa na marginesie) nie zostanie
+wykryty – aplikacja przypomina o sprawdzeniu podglądu skanów.
 
 **Paski nad polami formularza.** W Karcie Podpisów Autenti dane podpisujących (imię, e-mail, NIP, IP)
 leżą pod polami podpisu (widgety PDF) z białym tłem. Te pola są rysowane na wierzchu treści strony i zasłaniały
@@ -274,6 +289,7 @@ app.py                  # Streamlit: zakładki Anonimizacja / De-anonimizacja, p
 .streamlit/config.toml  # tylko localhost, limit pliku 25 MB, bez telemetrii
 engine/file_reader.py   # Odczyt plików: .txt .md .csv .log .json (UTF-8/cp1250), .pdf, .docx + normalizacja
 engine/ocr.py           # OCR (Tesseract w PyMuPDF) tylko na obrazach w PDF i .docx, z pamięcią podręczną
+engine/signatures.py    # Podpisy odręczne: wektorowe (kształt ścieżek) i na skanach (atrament przy „podpis”)
 engine/redactor.py      # PDF z czarnymi paskami w miejscu danych wrażliwych
 engine/regex_masker.py  # Etap 1: wzorce + walidatory sum kontrolnych
 engine/numerals.py      # Liczby zapisane słownie (telefon, kwota, PESEL, data)
