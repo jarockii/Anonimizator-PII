@@ -76,6 +76,33 @@ ANONIMIZATOR_NER_MODEL=fastino/gliner2-privacy-filter-PII-multi streamlit run ap
 | oryginalny GLiNER2-PII | 40/43 | 6 | 100/114 | 218/228 (95,6%) |
 | **gliner-pl-v3** | **43/43** | **4** | **105/114** | **222/228 (97,4%)** |
 
+**Zestaw kontrolny** (4 nowe dokumenty, 47 danych, niewidziane przy strojeniu i treningu – [eval/README](eval/README.md#zestaw-kontrolny---zestaw-kontrolny)):
+
+| Model | Regex + NER | Regex + NER + LLM (2 przebiegi) |
+|---|---|---|
+| oryginalny GLiNER2-PII | 31/47 (66,0%) | 80/94 (85,1%) |
+| gliner-pl-v3 | 34/47 (72,3%) | 82/94 (87,2%) |
+| **gliner-pl-v3 + reguły kontekstowe** | **42/47 (89,4%)** | **94/94 (100%)** |
+
+v3 jest lepszy także na nowych dokumentach, więc poprawa nie jest tylko dopasowaniem do zestawu podstawowego.
+Stałe wycieki z pierwszego pomiaru kontrolnego naprawiły ogólne reguły (a nie poprawki pod konkretne słowa –
+testy w `tests/test_context_rules.py` używają innych przykładów), opisane niżej w „Regułach kontekstowych”.
+Na zestawie podstawowym ten sam zestaw zmian dał **224/228 (98,2%)** (wcześniej 222/228). Zostały:
+„chemia / onkolog” (choroba mamy w czacie) i „brata prezesa”.
+
+**Reguły kontekstowe** ([engine/context_rules.py](engine/context_rules.py)), uruchamiane po Regexie:
+- firma przed formą prawną („BUD-MAX RZESZÓW SP. Z O.O.”), także gdy tabela PDF wstawia między słowa nazwy
+  liczby z sąsiednich kolumn; słowa-funkcje z przodu („Prezes Zarządu …”) są odcinane,
+- numer kredytu, pożyczki, polisy, klienta po słowie kluczowym („pożyczki gotówkowej nr PG/2023/118204”),
+- zdrobnienia imion z odmianą („Bartek”, „Zbyszka”, „Kasi”); dwuznaczne („Kuba”) pominięte,
+- „jedyny/jedyna + rzeczownik” jako identyfikacja pośrednia („jedyna kobieta”), ale nie „jedyny sposób”,
+- potoczny opis osoby po „ten co / ta co” („ten co sprzedaje miód na targu”),
+- stopień i symbol niepełnosprawności („umiarkowanym stopniu niepełnosprawności”, „10-N”).
+
+LLM dostał dwa zabezpieczenia przed utratą trafień: fragment danych szczególnych, który model „poprawił”
+(„chorobie płuc” zamiast „choroby płuc”, „jest [OSOBA_1] Solidarność”), jest odnajdywany w tekście po rdzeniach
+słów, a opis osoby bez słowa o relacji jest przyjmowany, gdy w tym samym zdaniu stoi „ten co…” albo „pan z…”.
+
 Naprawione m.in. celowniki „Szewczence”, „Brzęczyszczykiewiczowi” i nazwisko po „née”. Pomiar:
 `eval/szara_strefa.py` i `eval/run_eval.py` ([wyniki](eval/wyniki)). Uwaga: to te same 8 dokumentów, na których
 porównywaliśmy kolejne wersje treningu, więc wynik może być nieco optymistyczny. Bez złożonego modelu

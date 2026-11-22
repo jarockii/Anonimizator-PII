@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Callable
 
+from engine.context_rules import find_context_matches
 from engine.numerals import find_spelled_numbers
 from engine.vault import Vault
 
@@ -351,6 +352,17 @@ PATTERNS: list[PiiPattern] = [
                    r"(?-i:([A-Z]{1,3}\s?\d{5,9}))\b"),
         value_group=1,
     ),
+    # Numer kredytu, pożyczki, polisy, leasingu, klienta po słowie kluczowym:
+    # „kredytu hipotecznego nr KH/2019/00731”, „polisy nr PZ-4471-2025”. Taki
+    # numer wskazuje jedną osobę w banku/u ubezpieczyciela. Wymagamy cyfry
+    # i ≥ 6 znaków, a słowo kluczowe musi stać najwyżej 2 słowa przed „nr”.
+    PiiPattern(
+        "DOC_ID",
+        re.compile(r"(?i)\b(?:kredyt\w*|pożyczk\w*|polis\w*|leasing\w*|klient\w*|ubezpieczeni\w*"
+                   r"|szkod\w*|hipote\w*)(?:\s+[^\W\d_]+){0,2}?\s+(?:nr|numer)\.?\s*"
+                   r"(?-i:((?=[A-Z0-9/.-]*\d)[A-Z0-9][A-Z0-9/.-]{4,}[A-Z0-9]))(?![\w/-])"),
+        value_group=1,
+    ),
     # --- Rejestry firmowe --------------------------------------------------
     # KRS nie ma sumy kontrolnej, a 10 cyfr ma też NIP. Dlatego KRS łapiemy
     # tylko po słowie „KRS” albo po typowym początku „0000” (numery KRS są
@@ -516,10 +528,26 @@ def mask_spelled_numbers(text: str, vault: Vault, found: list[dict]) -> str:
     return "".join(pieces)
 
 
+def mask_context_rules(text: str, vault: Vault, found: list[dict]) -> str:
+    """Firmy przed formą prawną, zdrobnienia imion, „jedyny X”, niepełnosprawność
+    (engine/context_rules.py). Po wzorcach formatu – ich tokenów nie ruszamy."""
+    pieces, position = [], 0
+    for item in find_context_matches(text):
+        value = text[item.start:item.end]
+        token = vault.tokenize(item.category, value)
+        found.append({"token": token, "kategoria": item.category,
+                      "oryginał": value, "źródło": "regex"})
+        pieces += [text[position:item.start], token]
+        position = item.end
+    pieces.append(text[position:])
+    return "".join(pieces)
+
+
 def mask_with_regex(text: str, vault: Vault) -> tuple[str, list[dict]]:
     """Maskuje dane o stałym formacie. Zwraca (tekst_z_tokenami, wykryte)."""
     found: list[dict] = []
     for pattern in PATTERNS:
         text = pattern.regex.sub(_make_replacer(pattern, vault, found), text)
     text = mask_spelled_numbers(text, vault, found)
+    text = mask_context_rules(text, vault, found)
     return text, found
