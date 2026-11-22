@@ -5,7 +5,8 @@ Ten skrypt mierzy na 8 dokumentach z przyklady/, ile prawdziwych danych osobowyc
 i ile fałszywych alarmów wpada do każdej strefy.
 
 Uruchom z katalogu projektu:
-    python eval/szara_strefa.py
+    python eval/szara_strefa.py   # model domyślny (modele/gliner-pl-v3, jeśli jest złożony)
+    ANONIMIZATOR_NER_MODEL=fastino/gliner2-privacy-filter-PII-multi python eval/szara_strefa.py --nazwa przed
     python eval/szara_strefa.py --dol 0.2 --gora 0.5
     ANONIMIZATOR_NER_MODEL=modele/gliner-pl python eval/szara_strefa.py --nazwa po
 

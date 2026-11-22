@@ -1,7 +1,7 @@
 """Porównanie dwóch pomiarów GLiNER-a (np. przed i po treningu) – tabela + wykres.
 
 Najpierw dwa pomiary:
-    python eval/szara_strefa.py --nazwa przed
+    ANONIMIZATOR_NER_MODEL=fastino/gliner2-privacy-filter-PII-multi python eval/szara_strefa.py --nazwa przed
     ANONIMIZATOR_NER_MODEL=modele/gliner-pl python eval/szara_strefa.py --nazwa po
 Potem:
     python eval/porownaj_ner.py                      # przed vs po

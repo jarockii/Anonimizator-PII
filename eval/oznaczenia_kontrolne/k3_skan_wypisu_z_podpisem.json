@@ -1,0 +1,88 @@
+{
+  "plik": "przyklady/kontrolne/k3_skan_wypisu_z_podpisem.pdf",
+  "opis": "Skan wypisu ze szpitala bez warstwy tekstowej (OCR), podpis odręczny lekarza",
+  "dane": [
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Marianna",
+        "Sołtys"
+      ],
+      "opis": "nazwisko = rzeczownik (sołtys)"
+    },
+    {
+      "kategoria": "PESEL",
+      "fragmenty": [
+        "48021746000"
+      ]
+    },
+    {
+      "kategoria": "ADRES",
+      "fragmenty": [
+        "Zawadka 47"
+      ],
+      "opis": "adres wiejski"
+    },
+    {
+      "kategoria": "DATA",
+      "fragmenty": [
+        "02.02.2026"
+      ],
+      "opis": "przyjęcie do szpitala"
+    },
+    {
+      "kategoria": "DATA",
+      "fragmenty": [
+        "11.02.2026"
+      ],
+      "opis": "wypis"
+    },
+    {
+      "kategoria": "ZDROWIE",
+      "fragmenty": [
+        "obturacyjnej choroby płuc"
+      ]
+    },
+    {
+      "kategoria": "ZDROWIE",
+      "fragmenty": [
+        "cukrzyca typu 2"
+      ]
+    },
+    {
+      "kategoria": "ZDROWIE",
+      "fragmenty": [
+        "niewydolność serca"
+      ]
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Ignacy",
+        "Lipiec"
+      ],
+      "opis": "nazwisko = nazwa miesiąca"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Radosław",
+        "Kępka"
+      ]
+    },
+    {
+      "kategoria": "POSREDNI",
+      "fragmenty": [
+        "sołtyska wsi"
+      ],
+      "opis": "córka – sołtyska wsi Zawadka"
+    }
+  ],
+  "zwykle_slowa": [
+    "Rozpoznanie",
+    "Zalecenia",
+    "Pacjentka",
+    "Ordynator",
+    "insulina"
+  ]
+}

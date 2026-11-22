@@ -1,0 +1,87 @@
+{
+  "plik": "przyklady/kontrolne/k2_wniosek_ze_skanem_dowodu.docx",
+  "opis": "Wniosek .docx: tabela, dane o zdrowiu i zdjęcie dowodu jako obraz (OCR)",
+  "dane": [
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Teodora",
+        "Hryniewicz"
+      ],
+      "opis": "w tabeli i na obrazie dowodu (WIELKIMI)"
+    },
+    {
+      "kategoria": "PESEL",
+      "fragmenty": [
+        "71110423506"
+      ],
+      "opis": "w tabeli i na obrazie"
+    },
+    {
+      "kategoria": "ADRES",
+      "fragmenty": [
+        "Juszczyna 212"
+      ],
+      "opis": "adres wiejski"
+    },
+    {
+      "kategoria": "TEL",
+      "fragmenty": [
+        "609 118 427"
+      ]
+    },
+    {
+      "kategoria": "EMAIL",
+      "fragmenty": [
+        "t.hryniewicz71@skrzynka-kontrolna.pl"
+      ]
+    },
+    {
+      "kategoria": "DOWOD",
+      "fragmenty": [
+        "EDY700312"
+      ],
+      "opis": "tylko na obrazie dowodu"
+    },
+    {
+      "kategoria": "DATA",
+      "fragmenty": [
+        "04.11.1971"
+      ],
+      "opis": "data urodzenia, tylko na obrazie"
+    },
+    {
+      "kategoria": "ZDROWIE",
+      "fragmenty": [
+        "stwardnienie rozsiane"
+      ]
+    },
+    {
+      "kategoria": "ZDROWIE",
+      "fragmenty": [
+        "znacznym stopniu niepełnosprawności"
+      ]
+    },
+    {
+      "kategoria": "ZDROWIE",
+      "fragmenty": [
+        "05-R"
+      ],
+      "opis": "symbol przyczyny niepełnosprawności"
+    },
+    {
+      "kategoria": "POSREDNI",
+      "fragmenty": [
+        "jedynym fizjoterapeutą"
+      ],
+      "opis": "syn – jedyny fizjoterapeuta w przychodni"
+    }
+  ],
+  "zwykle_slowa": [
+    "Wniosek",
+    "Uzasadnienie",
+    "Załącznik",
+    "Telefon",
+    "Oświadczam"
+  ]
+}

@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field, ValidationError
 from engine.file_reader import PAGE_BREAK
 from engine.vault import TOKEN_BODY, Vault, value_pattern
 
-OLLAMA_URL = "http://localhost:11434"
+OLLAMA_URL = "http://127.0.0.1:11434"
 DEFAULT_MODEL = "qwen2.5:3b"
 
 # Literal -> w JSON Schema staje się "enum", więc model może wybrać
@@ -108,7 +108,13 @@ def validate_ollama_url(base_url: str) -> str:
             f"Adres „{host}” nie jest lokalny. Dozwolone: localhost, 127.0.0.1, ::1 "
             "– inaczej dane wrażliwe opuściłyby komputer."
         )
-    return base_url.strip().rstrip("/")
+    url = base_url.strip().rstrip("/")
+    if host.lower() == "localhost":
+        # Windows rozwiązuje „localhost” najpierw na IPv6 (::1), a Ollama słucha
+        # tylko na 127.0.0.1 – każde połączenie czekało ok. 2,1 s na nieudaną
+        # próbę. Przy 4–6 zapytaniach na dokument to 8–12 s straty.
+        url = url.replace(parsed.netloc, parsed.netloc.lower().replace("localhost", "127.0.0.1", 1), 1)
+    return url
 
 
 SYSTEM_PROMPT = """Jesteś systemem wykrywania danych osobowych (PII) w polskich tekstach.
@@ -241,6 +247,10 @@ def detect_entities(
     base_url = validate_ollama_url(base_url)
     chunks = split_into_chunks(text)
     entities: list[Entity] = []
+    if on_progress:
+        # Od razu: interfejs pokazuje „fragment 1 z N”, zanim model skończy
+        # pierwszy fragment (przy pierwszym starcie trwa to kilkanaście sekund).
+        on_progress(0, len(chunks))
     for number, chunk in enumerate(chunks, start=1):
         entities.extend(_detect_in_chunk(chunk, model, base_url, timeout))
         if on_progress:
@@ -579,6 +589,61 @@ _RELATION_HINT = re.compile(
 )
 
 
+# Zapowiedź opisu osoby tuż PRZED fragmentem: „pan z czwórki, ten co jeździ
+# czerwoną taksówką”, „ta, która mieszka nad sklepem”. Sam fragment („czerwoną
+# taksówką”) nie ma słowa o relacji, ale kontekst mówi, że opisuje człowieka.
+_DESCRIPTION_LEAD = re.compile(
+    r"(?i)\b(?:ten|ta|ci|te|tamten|tamta),?\s+(?:co|który|która|którzy|które|od)\b"
+    r"|\bpan(?:i|a|u|em|ią)?\s+(?:z|ze|od)\b"
+)
+# Ile znaków przed fragmentem sprawdzamy (mniej więcej jedno zdanie).
+DESCRIPTION_CONTEXT = 80
+
+
+def fuzzy_span(text: str, value: str) -> str | None:
+    """Fragment tekstu odpowiadający frazie, którą model „poprawił”.
+
+    Model 3B przepisuje odmianę i dokleja słowa: zwrócił „choruje na
+    zaostrzenie przewlekłej obturacyjnej chorobie płuc”, a w tekście jest
+    „Rozpoznanie: zaostrzenie przewlekłej obturacyjnej choroby płuc”. Szukamy
+    najdłuższego ciągu ≥ 2 kolejnych słów frazy, który jest w tekście po
+    rdzeniach (bez 3 ostatnich liter dłuższych słów), i zwracamy go DOKŁADNIE
+    tak, jak stoi w tekście. Tylko dla danych szczególnych i opisów osób –
+    tam pominięcie oznacza wyciek, a nie kosmetykę.
+    """
+    # Nasze tokeny („[OSOBA_1]”) to nie słowa frazy – inaczej rdzeń „OSOB”
+    # trafiłby w środek tokenu i go zepsuł.
+    words = re.findall(r"[^\W\d_]+|\d+", re.sub(r"\[[^\]]*\]|\b[A-Z]+_\d+\b", " ", value))
+    for size in range(len(words), 0, -1):
+        for first in range(len(words) - size + 1):
+            window = words[first:first + size]
+            if sum(len(w) for w in window) < 8 or max(len(w) for w in window) < 4:
+                continue
+            # Pojedyncze słowo tylko wtedy, gdy samo jest daną szczególną
+            # („Solidarność”, „cukrzyca”): model zwrócił „jest [OSOBA_1] Solidarność”,
+            # a w tekście było „jest [STANOWISKO_2] „Solidarność””.
+            if size == 1 and not SENSITIVE_HINTS.search(window[0]):
+                continue
+            parts = [re.escape(w[:max(4, len(w) - 3)]) + r"\w*" if len(w) >= 5 else re.escape(w)
+                     for w in window]
+            pattern = r"(?<![\w\[])" + r"[\s,;:–„”\"'()-]+".join(parts) + r"(?!\w)"
+            for match in re.finditer(pattern, text, re.IGNORECASE):
+                if "_" not in match.group(0):
+                    return match.group(0)
+    return None
+
+
+def described_in_context(text: str, value: str) -> bool:
+    """Czy tuż przed fragmentem stoi zapowiedź opisu osoby albo słowo relacji."""
+    index = text.casefold().find(value.casefold())
+    if index < 0 or len(value.split()) < 2:
+        return False
+    window = text[max(0, index - DESCRIPTION_CONTEXT):index]
+    # Tylko bieżące zdanie – „ta co…” z poprzedniego zdania nie dotyczy „Dostawa wózka”.
+    window = re.split(r"[.!?\n]", window)[-1]
+    return bool(_DESCRIPTION_LEAD.search(window) or _RELATION_HINT.search(window))
+
+
 # Nazwy ról w umowach i dokumentach (rdzenie – dowolna odmiana i wielkość liter).
 # „Pracownik”, „Najemcy”, „POŻYCZKOBIORCA” to nie imię i nazwisko, tylko funkcja.
 _ROLE_WORD = re.compile(
@@ -659,10 +724,22 @@ def apply_entities(text: str, entities: list, vault: Vault,
         if len(original) < 2:
             continue
         # Model czasem zwraca nasze własne tokeny – pomijamy je.
-        if "[" in original or "]" in original or BARE_TOKEN.fullmatch(original):
+        if BARE_TOKEN.fullmatch(original):
+            continue
+        if "[" in original or "]" in original:
+            # Fragment z tokenem w środku („jest [OSOBA_1] Solidarność”). Dla
+            # danych szczególnych i opisów szukamy jego słów (bez tokenów) po
+            # rdzeniach – inaczej „Solidarność” wyciekała. Resztę pomijamy.
+            if entity.tag in ("ZDROWIE", "WRAZLIWE", "POSREDNI"):
+                span = fuzzy_span(text, original)
+                if span and is_plausible(entity.tag, span):
+                    candidates.setdefault(span, entity.tag)
             continue
         tag = role_category(entity.tag, original)
-        if tag is None or not is_plausible(tag, original):
+        if tag is None:
+            continue
+        if not is_plausible(tag, original) and not (
+                tag == "POSREDNI" and described_in_context(text, original)):
             continue
         if tag == "OSOBA":
             # Każda odmieniona forma dostaje własny token, żeby
@@ -679,6 +756,12 @@ def apply_entities(text: str, entities: list, vault: Vault,
         # względu na wielkość liter – „LIVERI” i „Liveri” to ta sama nazwa).
         elif original.casefold() in folded_text:
             candidates.setdefault(original, tag)
+        elif tag in ("ZDROWIE", "WRAZLIWE", "POSREDNI"):
+            # Model zmienił odmianę albo dokleił słowa – szukamy po rdzeniach.
+            span = fuzzy_span(text, original)
+            if span and is_plausible(tag, span) or (span and tag == "POSREDNI"
+                                                    and described_in_context(text, span)):
+                candidates.setdefault(span, tag)
 
     # Najdłuższe najpierw: „Jan Kowalski” musi zostać podmieniony przed „Jan”,
     # inaczej zostałby „[OSOBA_2] Kowalski”.

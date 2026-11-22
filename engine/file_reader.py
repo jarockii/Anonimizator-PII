@@ -3,12 +3,11 @@
 Obsługujemy:
 - pliki tekstowe (.txt, .md, .csv, .log, .json) – bez dodatkowych bibliotek,
 - PDF (PyMuPDF) i Word .docx (python-docx) – najczęstsze formaty umów
-  i dokumentacji medycznej.
+  i dokumentacji medycznej. W obu tekst z obrazów odczytuje OCR (engine/ocr.py).
 
 Wszystko dzieje się lokalnie, w pamięci. Plik nie jest nigdzie zapisywany.
 """
 
-import io
 import unicodedata
 from pathlib import Path
 
@@ -115,20 +114,35 @@ def read_pdf_pages(data: bytes, ocr: bool = True) -> list[str]:
     return pages
 
 
-def read_docx(data: bytes) -> str:
-    from docx import Document
+def read_docx(data: bytes, ocr: bool = True) -> str:
+    """Tekst dokumentu Word w kolejności czytania (engine/docx_reader.py):
+    nagłówki, treść z tabelami, polami tekstowymi i kontrolkami formularza,
+    przypisy i stopki. Tekst rozpoznany na obrazach (ocr=True) trafia zaraz po
+    akapicie, w którym obraz stoi – model widzi go w kontekście
+    („Skan dowodu:” + treść dowodu).
+    """
+    from engine import docx_reader
 
     try:
-        document = Document(io.BytesIO(data))
+        document = docx_reader.open_document(data)
     except Exception as error:  # python-docx rzuca różne wyjątki dla złych plików
         raise FileReadError(f"Uszkodzony plik .docx: {error}") from error
 
-    lines = [paragraph.text for paragraph in document.paragraphs]
-    # Umowy często mają dane stron w tabelach – nie możemy ich pominąć.
-    for table in document.tables:
-        for row in table.rows:
-            lines.append(" | ".join(cell.text for cell in row.cells))
-    return "\n".join(lines).strip()
+    image_texts: dict[str, str] = {}
+    pending = 0
+    if ocr:
+        from engine.ocr import ocr_docx
+
+        report = ocr_docx(data)
+        image_texts = {name: normalize_text(text) for name, text in report.image_texts.items()}
+        pending = report.pending
+    text = docx_reader.document_text(document, image_texts)
+    if not text and pending:
+        raise FileReadError(
+            "Dokument Word zawiera same obrazy, a OCR jest niedostępny. Zainstaluj Tesseract "
+            "z językiem polskim, żeby odczytać tekst z obrazów."
+        )
+    return text
 
 
 def read_uploaded_pages(filename: str, data: bytes) -> list[str]:

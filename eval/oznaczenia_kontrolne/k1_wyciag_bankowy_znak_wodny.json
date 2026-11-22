@@ -1,0 +1,101 @@
+{
+  "plik": "przyklady/kontrolne/k1_wyciag_bankowy_znak_wodny.pdf",
+  "opis": "Wyciąg bankowy: tabela operacji, nazwiska w opisach przelewów, ukośny znak wodny",
+  "dane": [
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Hieronim",
+        "Pstrąg"
+      ],
+      "opis": "posiadacz rachunku"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Antoś"
+      ],
+      "opis": "dziecko, zdrobnienie w opisie opłaty"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Oksana",
+        "Melnyk"
+      ],
+      "opis": "odbiorca przelewu"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Celina",
+        "Krzemień"
+      ],
+      "opis": "nadawca przelewu"
+    },
+    {
+      "kategoria": "OSOBA",
+      "fragmenty": [
+        "Zdzisław",
+        "Wrona"
+      ],
+      "opis": "wpłata gotówkowa, nazwisko = rzeczownik"
+    },
+    {
+      "kategoria": "ADRES",
+      "fragmenty": [
+        "Wrzosowa 14/3"
+      ]
+    },
+    {
+      "kategoria": "ADRES",
+      "fragmenty": [
+        "Bielskiej 9/2"
+      ],
+      "opis": "lokal w opisie przelewu, dopełniacz"
+    },
+    {
+      "kategoria": "IBAN",
+      "fragmenty": [
+        "PL82 1940 1234 2780 5504 0645 8422"
+      ]
+    },
+    {
+      "kategoria": "TEL",
+      "fragmenty": [
+        "512 784 903"
+      ],
+      "opis": "BLIK na telefon"
+    },
+    {
+      "kategoria": "FIRMA",
+      "fragmenty": [
+        "HYDRO-TECH"
+      ],
+      "opis": "pracodawca"
+    },
+    {
+      "kategoria": "NIP",
+      "fragmenty": [
+        "188-526-91-35"
+      ],
+      "opis": "NIP pracodawcy"
+    },
+    {
+      "kategoria": "DOC_ID",
+      "fragmenty": [
+        "KH/2019/00731"
+      ],
+      "opis": "numer kredytu hipotecznego"
+    }
+  ],
+  "zwykle_slowa": [
+    "Saldo",
+    "Przelew",
+    "BLIK",
+    "KOPIA",
+    "Wynagrodzenie",
+    "przedszkole",
+    "Obciążenia"
+  ]
+}

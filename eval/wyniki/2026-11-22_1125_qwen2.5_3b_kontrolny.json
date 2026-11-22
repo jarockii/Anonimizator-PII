@@ -1,0 +1,123 @@
+{
+ "konfiguracja": "model=qwen2.5:3b · NER=tak · LLM=tak · przebiegi=2 · zestaw=kontrolny · NER-model=gliner-pl-v3",
+ "dokumenty": [
+  {
+   "nazwa": "k1_wyciag_bankowy_znak_wodny",
+   "opis": "Wyciąg bankowy: tabela operacji, nazwiska w opisach przelewów, ukośny znak wodny",
+   "danych": 12,
+   "wycieki_srednio": 0.0,
+   "wycieki": {},
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 6.8,
+   "do_sprawdzenia": 0,
+   "etapy": {},
+   "brakujace_fragmenty": []
+  },
+  {
+   "nazwa": "k2_wniosek_ze_skanem_dowodu",
+   "opis": "Wniosek .docx: tabela, dane o zdrowiu i zdjęcie dowodu jako obraz (OCR)",
+   "danych": 11,
+   "wycieki_srednio": 0.0,
+   "wycieki": {},
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 9.3,
+   "do_sprawdzenia": 0,
+   "etapy": {},
+   "brakujace_fragmenty": []
+  },
+  {
+   "nazwa": "k3_skan_wypisu_z_podpisem",
+   "opis": "Skan wypisu ze szpitala bez warstwy tekstowej (OCR), podpis odręczny lekarza",
+   "danych": 11,
+   "wycieki_srednio": 0.0,
+   "wycieki": {},
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 7.1,
+   "do_sprawdzenia": 0,
+   "etapy": {},
+   "brakujace_fragmenty": []
+  },
+  {
+   "nazwa": "k4_protokol_wspolnoty",
+   "opis": "Protokół zebrania wspólnoty: potocznie, zdrobnienia, identyfikacja pośrednia, telefon słownie",
+   "danych": 13,
+   "wycieki_srednio": 0.0,
+   "wycieki": {},
+   "nadmiar": {},
+   "zostawione": [],
+   "czas_s": 7.2,
+   "do_sprawdzenia": 0,
+   "etapy": {},
+   "brakujace_fragmenty": []
+  }
+ ],
+ "kategorie": {
+  "ADRES": {
+   "ukryto": 10,
+   "razem": 10
+  },
+  "DATA": {
+   "ukryto": 6,
+   "razem": 6
+  },
+  "DOC_ID": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "DOWOD": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "DZIALKA": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "EMAIL": {
+   "ukryto": 4,
+   "razem": 4
+  },
+  "FIRMA": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "IBAN": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "KW": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "NIP": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "OSOBA": {
+   "ukryto": 26,
+   "razem": 26
+  },
+  "PESEL": {
+   "ukryto": 4,
+   "razem": 4
+  },
+  "POSREDNI": {
+   "ukryto": 8,
+   "razem": 8
+  },
+  "REJESTRACJA": {
+   "ukryto": 2,
+   "razem": 2
+  },
+  "TEL": {
+   "ukryto": 6,
+   "razem": 6
+  },
+  "ZDROWIE": {
+   "ukryto": 14,
+   "razem": 14
+  }
+ }
+}

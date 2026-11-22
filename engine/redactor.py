@@ -27,6 +27,7 @@ import pymupdf
 
 from engine.file_reader import PAGE_BREAK, normalize_pdf_text
 from engine.ocr import OcrWord, ocr_pdf
+from engine import signatures
 
 # O ile zmniejszamy pasek od góry. 0 = pełna wysokość linii: przy 10%
 # nad paskiem wystawały kreski z „Ś”, „Ź”, „Ż” pisanych WIELKIMI literami
@@ -52,6 +53,8 @@ class RedactionResult:
     missing: list[str] = field(default_factory=list)   # wartości nieznalezione
     images: int = 0                                    # ile obrazów usunięto
     background_pages: int = 0                          # strony-skany (tło pominięte)
+    vector_signatures: int = 0                         # podpisy wektorowe (paski)
+    scan_signatures: int = 0                           # podpisy na skanach (przy „podpis”)
 
 
 def _clean_values(values: list[str]) -> list[str]:
@@ -135,16 +138,85 @@ class PageWord:
     rect: pymupdf.Rect      # położenie na stronie
     line: tuple             # (blok, linia) – do łączenia słów w jeden pasek;
                             # słowa z OCR: („ocr”, nr obrazu, blok, linia)
+    quad: "QuadBar | None" = None   # tylko tekst obrócony (np. ukośny znak wodny)
+
+
+@dataclass
+class QuadBar:
+    """Pasek na słowie pisanym po skosie: obrócony czworokąt.
+
+    faint_level: dla bladego, półprzezroczystego napisu (typowy znak wodny)
+    – jasność, jaką ma on na białym tle. Wtedy zamiast czarnego czworokąta
+    wybielamy w nim tylko jasne piksele: napis znika, a ciemny tekst
+    tabeli pod nim zostaje czytelny.
+    """
+    quad: pymupdf.Quad
+    faint_level: int | None = None
+
+    def __mul__(self, matrix):
+        return QuadBar(self.quad * matrix, self.faint_level)
+
+
+# Linia, której kierunek odchyla się od poziomu bardziej niż o ok. 1°, jest
+# „obrócona”. Prostokąt otaczający słowo pisane po skosie to prawie cała
+# strona: ukośny znak wodny „SPECIMEN” (92 pt, 38°) na wyciągu bankowym
+# miał prostokąt 446 × 387 pt – pasek na nim zakrywał całą tabelę.
+ROTATION_TOLERANCE = 0.02
+# Napis jaśniejszy niż to na białym tle (0–255) uznajemy za blady znak wodny.
+FAINT_TEXT_LEVEL = 200
+# Wybielamy piksele od (jasność napisu − margines) w górę – margines łapie
+# napis na lekko szarym tle wierszy tabeli i wygładzone krawędzie liter.
+FAINT_MARGIN = 25
+
+
+def _rendered_level(span: dict) -> int:
+    """Jasność napisu na białym tle: kolor zmieszany z bielą według alfy."""
+    color, alpha = span.get("color", 0), span.get("alpha", 255) / 255
+    channels = ((color >> 16) & 255, (color >> 8) & 255, color & 255)
+    return int(min(255 - (255 - c) * alpha for c in channels))
+
+
+def _rotated_word_quads(page: pymupdf.Page) -> list[tuple[str, QuadBar]]:
+    """Słowa z obróconych linii i ich dokładne (obrócone) czworokąty."""
+    found = []
+    for block in page.get_text("rawdict")["blocks"]:
+        for line in block.get("lines", []):
+            direction = line["dir"]
+            if abs(direction[1]) <= ROTATION_TOLERANCE and direction[0] > 0:
+                continue
+            word: list[tuple[dict, dict]] = []
+            chars = [(span, char) for span in line["spans"] for char in span["chars"]]
+            for span, char in chars + [(None, None)]:
+                if char is not None and not char["c"].isspace():
+                    word.append((span, char))
+                    continue
+                if word:
+                    first = pymupdf.recover_char_quad(direction, *word[0])
+                    last = pymupdf.recover_char_quad(direction, *word[-1])
+                    text = "".join(c["c"] for _, c in word)
+                    level = min(_rendered_level(span) for span, _ in word)
+                    found.append((text, QuadBar(pymupdf.Quad(first.ul, last.ur, first.ll, last.lr),
+                                                level if level >= FAINT_TEXT_LEVEL else None)))
+                    word = []
+    return found
 
 
 def page_words(page: pymupdf.Page) -> list[PageWord]:
     """Lista słów strony w kolejności czytania (bez samej interpunkcji)."""
+    rotated = _rotated_word_quads(page)
     words = []
     for x0, y0, x1, y1, text, block, line, _ in page.get_text("words", sort=True):
         key = _normalize_word(text)
         if key:
-            words.append(PageWord(key, pymupdf.Rect(x0, y0, x1, y1), (block, line)))
+            rect = pymupdf.Rect(x0, y0, x1, y1)
+            quad = next((q for t, q in rotated if t == text and _same_box(q.quad.rect, rect)), None)
+            words.append(PageWord(key, rect, (block, line), quad))
     return words
+
+
+def _same_box(a: pymupdf.Rect, b: pymupdf.Rect) -> bool:
+    overlap = (a & b).get_area()
+    return overlap > 0.8 * max(a.get_area(), b.get_area(), 1e-6)
 
 
 def ocr_page_words(ocr_words: list[OcrWord]) -> list[PageWord]:
@@ -178,7 +250,7 @@ def _word_matches(page_key: str, target_key: str, first: bool, last: bool) -> bo
     return False
 
 
-def find_value_rects(words: list[PageWord], value: str) -> list[pymupdf.Rect]:
+def find_value_rects(words: list[PageWord], value: str) -> list["pymupdf.Rect | QuadBar"]:
     """Prostokąty, w których wartość występuje na stronie – CAŁYMI słowami.
 
     Wszystkie słowa wartości muszą stać obok siebie w tej samej kolejności
@@ -197,10 +269,13 @@ def find_value_rects(words: list[PageWord], value: str) -> list[pymupdf.Rect]:
         window = words[i:i + size]
         if all(_word_matches(word.key, key, first=(k == 0), last=(k == size - 1))
                for k, (word, key) in enumerate(zip(window, target))):
-            # Jeden pasek na każdą linię, którą zajmuje wartość.
+            # Jeden pasek na każdą linię, którą zajmuje wartość. Słowo obrócone
+            # dostaje własny, obrócony pasek (czworokąt), a nie prostokąt.
             by_line: dict[tuple[int, int], pymupdf.Rect] = {}
             for word in window:
-                if word.line in by_line:
+                if word.quad is not None:
+                    rects.append(word.quad)
+                elif word.line in by_line:
                     by_line[word.line] |= word.rect   # suma prostokątów
                 else:
                     by_line[word.line] = pymupdf.Rect(word.rect)
@@ -262,8 +337,46 @@ def remove_images(page: pymupdf.Page) -> int:
     return len(rects)
 
 
+def _black(pixmap: pymupdf.Pixmap) -> tuple:
+    # Czarny = 0 w kanałach koloru; kanał alfa (jeśli jest) = 255,
+    # inaczej „czarny” piksel byłby przezroczysty.
+    return (0,) * (pixmap.n - 1) + (255,) if pixmap.alpha else (0,) * pixmap.n
+
+
+def _burn_quad(pixmap: pymupdf.Pixmap, bar: QuadBar) -> None:
+    """Pasek na tekście pisanym po skosie (czworokąt w pikselach).
+
+    Zwykły napis: czarny czworokąt. Blady znak wodny: wybielenie jasnych
+    pikseli w czworokącie – litery znikają (nie da się ich odczytać), a ciemny
+    tekst, który leży na znaku wodnym, zostaje.
+    """
+    import numpy as np
+
+    quad = bar.quad
+    corners = [quad.ul, quad.ur, quad.lr, quad.ll]
+    box = quad.rect.irect & pixmap.irect
+    if box.is_empty:
+        return
+    ys, xs = np.mgrid[box.y0:box.y1, box.x0:box.x1] + 0.5
+    inside_pos = np.ones(xs.shape, dtype=bool)
+    inside_neg = np.ones(xs.shape, dtype=bool)
+    for a, b in zip(corners, corners[1:] + corners[:1]):
+        cross = (b.x - a.x) * (ys - a.y) - (b.y - a.y) * (xs - a.x)
+        inside_pos &= cross >= 0
+        inside_neg &= cross <= 0
+    mask = inside_pos | inside_neg            # wewnątrz przy obu kierunkach obiegu
+    pixels = np.frombuffer(pixmap.samples_mv, dtype=np.uint8).reshape(pixmap.height, pixmap.width, pixmap.n)
+    region = pixels[box.y0:box.y1, box.x0:box.x1]
+    if bar.faint_level is None:
+        region[mask] = _black(pixmap)
+        return
+    colors = region[:, :, : min(3, pixmap.n)]
+    light = mask & (colors.min(axis=2) >= bar.faint_level - FAINT_MARGIN)
+    region[light] = (255,) * pixmap.n
+
+
 def burn_bars(pixmap: pymupdf.Pixmap, page: pymupdf.Page,
-              rects: list[pymupdf.Rect], dpi: int) -> None:
+              rects: list["pymupdf.Rect | QuadBar"], dpi: int) -> None:
     """Wypala czarne paski bezpośrednio w pikselach wyrenderowanej strony.
 
     Dlaczego nie page.draw_rect() przed renderowaniem? Pola formularza
@@ -278,13 +391,13 @@ def burn_bars(pixmap: pymupdf.Pixmap, page: pymupdf.Page,
     # Współrzędne tekstu -> piksele: obrót strony (jeśli jest) i skala dpi.
     matrix = page.rotation_matrix * pymupdf.Matrix(dpi / 72, dpi / 72)
     for rect in rects:
+        if isinstance(rect, QuadBar):
+            _burn_quad(pixmap, rect * matrix)
+            continue
         bar = pymupdf.Rect(rect.x0, rect.y0 + rect.height * TOP_SHRINK, rect.x1, rect.y1)
         pixel_rect = (bar * matrix).irect & pixmap.irect
         if not pixel_rect.is_empty:
-            # Czarny = 0 w kanałach koloru; kanał alfa (jeśli jest) = 255,
-            # inaczej „czarny” piksel byłby przezroczysty.
-            black = (0,) * (pixmap.n - 1) + (255,) if pixmap.alpha else (0,) * pixmap.n
-            pixmap.set_rect(pixel_rect, black)
+            pixmap.set_rect(pixel_rect, _black(pixmap))
 
 
 def redact_pdf(
@@ -297,7 +410,9 @@ def redact_pdf(
     """Zaczernia wartości w istniejącym PDF i spłaszcza strony do obrazków.
 
     redact_images=True dodatkowo wycina wszystkie obrazy osadzone w PDF
-    (podpisy odręczne, pieczątki, kody QR, zdjęcia dowodu).
+    (podpisy odręczne, pieczątki, kody QR, zdjęcia dowodu), zaczernia podpisy
+    narysowane wektorowo, a na stronach-skanach – pismo odręczne przy słowie
+    „podpis” (engine/signatures.py).
     ocr=True: paski także na słowach rozpoznanych na obrazach (skan bez
     warstwy tekstowej, pieczątka). Wynik OCR jest brany z pamięci – ten sam
     plik był już rozpoznany przy odczycie tekstu.
@@ -310,12 +425,17 @@ def redact_pdf(
     bars = 0
     images = 0
     background_pages = 0
+    vector_signatures = scan_signatures = 0
 
     for page in source:
+        is_scan = False
+        signature_bars: list[pymupdf.Rect] = []
         if redact_images:
-            if split_page_images(page)[1]:
-                background_pages += 1
+            is_scan = bool(split_page_images(page)[1])
+            background_pages += is_scan
             images += remove_images(page)
+            signature_bars = signatures.find_vector_signatures(page)
+            vector_signatures += len(signature_bars)
 
         words = page_words(page)
         if page.number < len(ocr_words):
@@ -331,13 +451,25 @@ def redact_pdf(
         # Spłaszczenie: nowa strona zawiera TYLKO obrazek starej strony.
         # Tekst, metadane i ukryte warstwy oryginału nie przechodzą dalej.
         pixmap = page.get_pixmap(dpi=dpi)
-        burn_bars(pixmap, page, page_bars, dpi)
+        if is_scan:
+            # Na tym samym obrazie strony, PRZED paskami danych (czarne
+            # prostokąty liczyłyby się jako atrament). Tylko skany – na zwykłej
+            # stronie podpis to osobny obraz (wycięty wyżej) albo wektor.
+            # Surowe słowa (także „……” i „____”, które page_words pomija
+            # jako samą interpunkcję) – to też tekst, nie podpis.
+            scan_words = [(w[4], pymupdf.Rect(w[:4])) for w in page.get_text("words")]
+            if page.number < len(ocr_words):
+                scan_words += [(w.text, w.rect) for w in ocr_words[page.number]]
+            for rect in signatures.find_scan_signatures(pixmap, page.rect, scan_words):
+                pixmap.set_rect(rect, _black(pixmap))
+                scan_signatures += 1
+        burn_bars(pixmap, page, page_bars + signature_bars, dpi)
         new_page = output.new_page(width=page.rect.width, height=page.rect.height)
         new_page.insert_image(new_page.rect, pixmap=pixmap)
 
     missing = [v for v in unique_values if v not in found]
     return RedactionResult(output.tobytes(garbage=3, deflate=True), bars, missing,
-                           images, background_pages)
+                           images, background_pages, vector_signatures, scan_signatures)
 
 
 def render_preview(pdf_bytes: bytes, page_number: int = 0, dpi: int = 90) -> bytes:

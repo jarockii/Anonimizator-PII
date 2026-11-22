@@ -48,17 +48,27 @@ na CPU – dlatego zostaje float32; NER można wyłączyć w pasku bocznym.
 Model był trenowany na EN/FR/ES/DE/IT/PT/NL, po polsku działa zero-shot. Progi pewności per etykieta
 (`engine/ner_masker.py`) są dobrane pomiarem.
 
-### Dotrenowany polski GLiNER (v3) – opcjonalny
+### Dotrenowany polski GLiNER (v3) – domyślny po złożeniu
 
 Model dotrenowaliśmy (LoRA, 1 epoka, CPU, ~3 min) na syntetycznych polskich zdaniach z
 [`training/gliner_dane.py`](training/gliner_dane.py): odmiana nazwisk we wszystkich przypadkach, osoby po tytule
 („dr”, „mgr inż.”) oraz przykłady negatywne (samo „PESEL”, „wew. 214”, nazwy miast, stanowiska). Żadne słowo
 z oznaczeń testowych nie trafia do treningu. W repo jest sama nakładka LoRA (~10 MB, [`nakladki/gliner-pl-v3`](nakladki/gliner-pl-v3)),
-a skrypt składa z niej gotowy model:
+a skrypt składa z niej gotowy model w `modele/gliner-pl-v3` (poza gitem, ~1,2 GB):
 
 ```bash
-python training/scal_nakladke.py                                  # raz: pobiera oryginał i nakłada LoRA
-ANONIMIZATOR_NER_MODEL=modele/gliner-pl-v3 streamlit run app.py
+python training/scal_nakladke.py      # raz: pobiera oryginał i nakłada LoRA
+streamlit run app.py                  # sam wykryje modele/gliner-pl-v3
+```
+
+Gdy `modele/gliner-pl-v3` istnieje, aplikacja (i `eval/run_eval.py`) **używa go domyślnie**. Pasek boczny pokazuje,
+który model NER działa. Inny model albo oryginał wymusza zmienna `ANONIMIZATOR_NER_MODEL`:
+
+```powershell
+$env:ANONIMIZATOR_NER_MODEL = "fastino/gliner2-privacy-filter-PII-multi"; streamlit run app.py   # Windows
+```
+```bash
+ANONIMIZATOR_NER_MODEL=fastino/gliner2-privacy-filter-PII-multi streamlit run app.py             # Linux/macOS
 ```
 
 | Model | Osoby (sam NER) | Zwykłe słowa zamaskowane | Regex + NER | Regex + NER + LLM |
@@ -66,10 +76,37 @@ ANONIMIZATOR_NER_MODEL=modele/gliner-pl-v3 streamlit run app.py
 | oryginalny GLiNER2-PII | 40/43 | 6 | 100/114 | 218/228 (95,6%) |
 | **gliner-pl-v3** | **43/43** | **4** | **105/114** | **222/228 (97,4%)** |
 
+**Zestaw kontrolny** (4 nowe dokumenty, 47 danych, niewidziane przy strojeniu i treningu – [eval/README](eval/README.md#zestaw-kontrolny---zestaw-kontrolny)):
+
+| Model | Regex + NER | Regex + NER + LLM (2 przebiegi) |
+|---|---|---|
+| oryginalny GLiNER2-PII | 31/47 (66,0%) | 80/94 (85,1%) |
+| gliner-pl-v3 | 34/47 (72,3%) | 82/94 (87,2%) |
+| **gliner-pl-v3 + reguły kontekstowe** | **42/47 (89,4%)** | **94/94 (100%)** |
+
+v3 jest lepszy także na nowych dokumentach, więc poprawa nie jest tylko dopasowaniem do zestawu podstawowego.
+Stałe wycieki z pierwszego pomiaru kontrolnego naprawiły ogólne reguły (a nie poprawki pod konkretne słowa –
+testy w `tests/test_context_rules.py` używają innych przykładów), opisane niżej w „Regułach kontekstowych”.
+Na zestawie podstawowym ten sam zestaw zmian dał **224/228 (98,2%)** (wcześniej 222/228). Zostały:
+„chemia / onkolog” (choroba mamy w czacie) i „brata prezesa”.
+
+**Reguły kontekstowe** ([engine/context_rules.py](engine/context_rules.py)), uruchamiane po Regexie:
+- firma przed formą prawną („BUD-MAX RZESZÓW SP. Z O.O.”), także gdy tabela PDF wstawia między słowa nazwy
+  liczby z sąsiednich kolumn; słowa-funkcje z przodu („Prezes Zarządu …”) są odcinane,
+- numer kredytu, pożyczki, polisy, klienta po słowie kluczowym („pożyczki gotówkowej nr PG/2023/118204”),
+- zdrobnienia imion z odmianą („Bartek”, „Zbyszka”, „Kasi”); dwuznaczne („Kuba”) pominięte,
+- „jedyny/jedyna + rzeczownik” jako identyfikacja pośrednia („jedyna kobieta”), ale nie „jedyny sposób”,
+- potoczny opis osoby po „ten co / ta co” („ten co sprzedaje miód na targu”),
+- stopień i symbol niepełnosprawności („umiarkowanym stopniu niepełnosprawności”, „10-N”).
+
+LLM dostał dwa zabezpieczenia przed utratą trafień: fragment danych szczególnych, który model „poprawił”
+(„chorobie płuc” zamiast „choroby płuc”, „jest [OSOBA_1] Solidarność”), jest odnajdywany w tekście po rdzeniach
+słów, a opis osoby bez słowa o relacji jest przyjmowany, gdy w tym samym zdaniu stoi „ten co…” albo „pan z…”.
+
 Naprawione m.in. celowniki „Szewczence”, „Brzęczyszczykiewiczowi” i nazwisko po „née”. Pomiar:
 `eval/szara_strefa.py` i `eval/run_eval.py` ([wyniki](eval/wyniki)). Uwaga: to te same 8 dokumentów, na których
-porównywaliśmy kolejne wersje treningu, więc wynik może być nieco optymistyczny. Domyślnie aplikacja używa
-oryginalnego modelu.
+porównywaliśmy kolejne wersje treningu, więc wynik może być nieco optymistyczny. Bez złożonego modelu
+aplikacja używa oryginału. Liczba parametrów po scaleniu LoRA się nie zmienia (0,31 mld).
 
 ## 🧩 Podział pracy: Regex, NER, LLM
 
@@ -110,11 +147,62 @@ pokazuje sumę i ostrzega, gdy model jest za duży (np. qwen3.5:4b ma 4,21 mld �
 - Regex wykrywa też karty płatnicze (suma Luhna), klucze PEM, tokeny GitHub/Slack/Google/Stripe
   i adresy IPv6.
 
+## Interfejs
+
+Spokojny, „produktowy” wygląd bez emoji i dekoracji. Motyw jest w `.streamlit/config.toml`,
+a to, czego motyw nie obejmuje (karty, przyciski destrukcyjne, rytm odstępów), w [ui.py](ui.py).
+
+| Token | Kolor | Użycie |
+|---|---|---|
+| Primary | `#1F2F4D` | znak marki, nagłówki |
+| Secondary | `#4B5D78` | drugorzędne ikony i akcje |
+| Accent | `#2456D6` | główna akcja na ekranie („Anonimizuj”, „Przywróć dane”) |
+| Background / Surface | `#F5F6F8` / `#FFFFFF` | tło aplikacji / karty, panele, okna |
+| Text / Text secondary | `#111827` / `#4B5563` | tekst główny / pomocniczy |
+| Border | `#E2E5EA` | obramowania kart i pól |
+| Success / Warning / Error / Info | `#15803D` / `#B45309` / `#B91C1C` / `#1D4ED8` | stany i komunikaty |
+
+Każdy kolor tekstu ma kontrast **≥ 4,5:1** (WCAG 2.1 AA) na tle, na którym występuje – policzony, nie na oko
+(np. akcent 6,2:1, tekst pomocniczy 7,6:1, komunikat błędu 7,6:1 na swoim tle). Pilnuje tego test `tests/test_ui.py`.
+
+**Motyw ciemny.** Ta sama struktura tokenów w odcieniach granatu: tło `#0F141B`, karty `#161C25`, tekst `#E6EAF0`
+(14,2:1), pomocniczy `#A3AEBD` (7,6:1), akcent `#3B6FE0` (biały tekst 4,6:1), komunikaty na swoim tle 8,9–11,5:1.
+Domyślnie aplikacja idzie za ustawieniem systemu, a w menu (⋮) można wybrać jasny lub ciemny. Streamlit nie oznacza
+aktywnego motywu w stronie, a `st.context.theme` przy pierwszym wczytaniu podawał zły typ, więc motyw kart rozpoznaje
+mały, stały skrypt po jasności tła aplikacji – działa też po ręcznej zmianie w menu.
+
+- **Ikony:** wyłącznie Material Symbols Rounded (`:material/nazwa:`), wbudowane w Streamlit – działają offline,
+  jedna biblioteka, jedna grubość linii.
+- **Typografia:** Inter, jeśli jest zainstalowany; inaczej Segoe UI Variable (Windows), SF (macOS), Roboto (Linux).
+  Celowo bez Google Fonts – przeglądarka nie łączy się z żadnym serwerem poza tym komputerem. Skala nagłówków
+  26 / 20 / 17 / 15 px, tekst 15 px, kod 13 px.
+- **Komponenty:** przyciski główne (akcent), drugorzędne (obramowane), trzeciorzędne (tekstowe) i destrukcyjne
+  (czerwone, zawsze z oknem potwierdzenia); karty z jednolitym promieniem 12 px i odstępami 4/8/12/16/24 px;
+  okna dialogowe (token sejfu, czyszczenie sejfu); powiadomienia (toast po anonimizacji); puste stany, które
+  mówią, co się w danym miejscu pojawi.
+- **Postęp:** anonimizacja działa w tle, a pasek odświeża się co 0,25 s z licznikiem sekund
+  („Model językowy: fragment 2 z 5 · 12 s”). Po 20 s pojawia się „Wciąż analizuję…” z wyjaśnieniem (pierwszy start
+  wczytuje modele), po 60 s – podpowiedź o trybie oszczędzania energii. Wcześniej pasek ruszał się dopiero po
+  skończonym fragmencie i przy pierwszym starcie wyglądał na zawieszony.
+- **Nawigacja:** dwie karty – *Anonimizacja* i *Przywracanie danych*; panel boczny ze stanem systemu
+  (LLM, NER, OCR, limit parametrów), etapami wykrywania, „Zostaw jawnie”, ustawieniami zaawansowanymi i sejfem.
+- Na telefonie (390 px) bez przewijania w poziomie; karty zmniejszają marginesy wewnętrzne.
+
 ## Pliki
 
 Tekst można wkleić, wybrać przypadek testowy albo wczytać plik: `.txt`, `.md`, `.csv`, `.log`, `.json`,
-`.pdf`, `.docx` (także tabele w Wordzie). Pliki są czytane w pamięci i nigdzie nie zapisywane.
+`.pdf`, `.docx` (także tabele i obrazy w Wordzie). Pliki są czytane w pamięci i nigdzie nie zapisywane.
 Odpowiedź AI też można wczytać z pliku. Zanonimizowany i przywrócony tekst można pobrać jako `.txt`.
+
+**Word (`.docx`) w całości** ([engine/docx_reader.py](engine/docx_reader.py)). Zwykłe `document.paragraphs`
+z python-docx pomija sporo miejsc, w których w pismach stoją dane, więc czytamy XML sami, w kolejności dokumentu:
+nagłówki, treść, przypisy dolne i końcowe, stopki. W treści także pola tekstowe (pieczątka jako kształt),
+kontrolki formularza („Najemca: [pole]” – w akapicie i jako blok) i tabele zagnieżdżone w komórkach.
+Pole tekstowe Word zapisuje dwa razy (DrawingML + kopia VML dla starych wersji) – kopię pomijamy, inaczej tekst
+byłby podwojony. Scalona komórka nie jest już powtarzana w każdej kolumnie, a tekst usunięty w śledzeniu zmian
+nie trafia do wyniku. Na pliku testowym z tymi elementami wcześniej znikało 8 z 8 danych – teraz każda jest
+odczytana dokładnie raz. Komentarze recenzentów i metadane (autor pliku) nie są czytane.
+
 ### 🖼️ OCR tylko na obrazach
 
 Skany, pieczątki i zdjęcia dokumentów w PDF są odczytywane przez OCR (Tesseract przez PyMuPDF,
@@ -135,11 +223,24 @@ i potrzebuje tylko plików modeli, więc zamiast instalacji systemowej wystarczy
 `pol.traineddata` i `eng.traineddata` (z [tesseract-ocr/tessdata](https://github.com/tesseract-ocr/tessdata))
 do katalogu `tessdata/` w projekcie – bez uprawnień administratora. Bez modeli aplikacja działa dalej,
 ale gdy PDF ma obrazy z możliwym tekstem, wynik jest wstrzymany do ręcznego sprawdzenia.
-Obrazy w plikach `.docx` nie są jeszcze rozpoznawane.
+
+**Obrazy w Wordzie (`.docx`).** OCR przechodzi też po obrazach wstawionych w treść dokumentu
+(zdjęcie dowodu, zeskanowana pieczątka, zrzut ekranu – także w komórkach tabeli). Rozpoznany tekst
+trafia **zaraz po akapicie z obrazem**, więc model widzi go w kontekście
+(„Skan dowodu w załączniku:” + treść dowodu); obraz w komórce tabeli – w tej komórce. Obrazy są czytane
+także z nagłówków, stopek, pól tekstowych i przypisów. Ten sam obraz wstawiony kilka razy (logo) jest rozpoznawany raz.
+Obraz nie ma tu rozmiaru na stronie, więc:
+
+- pomijane są obrazy mniejsze niż 40 × 16 px (punktory, ikony),
+- obrazy węższe niż 1600 px są powiększane (maks. ×3) – bez tego tekst 11 pt z obrazu 72 dpi
+  dawał „PESEL 92031802349” (zła cyfra, więc Regex go nie łapał), a z powiększeniem jest bezbłędny.
+
+Bez Tesseracta wynik dla `.docx` z obrazami jest wstrzymany do sprawdzenia, jak przy PDF. Obrazy
+w formatach wektorowych Worda (EMF/WMF) nie są odczytywane – wstrzymują wynik jako błąd OCR.
 
 PDF jest czytany **strona po stronie** (`page.get_text("text", sort=True)`), więc tabele, kolumny
 i pieczęcie z Karty Podpisów (np. Autenti) wychodzą w kolejności czytania. Rozwijana sekcja
-„🔍 Co odczytano z pliku” pokazuje dokładnie, co odczytał parser, z podziałem na strony.
+„Co odczytano z pliku” pokazuje dokładnie, co odczytał parser, z podziałem na strony.
 Tekst jest normalizowany: myślnik zapisany w PDF jako SOFT HYPHEN (U+00AD) zamieniamy na „-”.
 Bez tego NIP, UUID i daty z Karty Podpisów wyglądały poprawnie, ale regex ich nie widział.
 
@@ -147,7 +248,7 @@ Bez tego NIP, UUID i daty z Karty Podpisów wyglądały poprawnie, ale regex ich
 
 Zamiast tabeli mapowań (token → oryginał) aplikacja pokazuje **jeden token**, np. `PIIVAULT1.eNpF…`,
 który zawiera cały sejf: JSON → kompresja zlib → base64 plus suma kontrolna CRC32.
-Żeby odszyfrować odpowiedź AI, wklej ją w zakładce 2 razem z tokenem. Działa to także po zamknięciu
+Żeby odszyfrować odpowiedź AI, wklej ją na karcie „Przywracanie danych” razem z tokenem. Działa to także po zamknięciu
 karty przeglądarki albo na innym komputerze, a dalsza anonimizacja z tym samym sejfem daje te same tokeny.
 
 ⚠️ To **nie jest szyfrowanie**: token jest kluczem do danych, więc kto go ma, odczyta oryginały.
@@ -167,18 +268,33 @@ Paski nie są nakładką na tekst: prawdziwych danych nie ma w pliku, więc nie 
 
 Wartości, których nie udało się znaleźć w PDF, aplikacja wypisuje do ręcznego sprawdzenia.
 
-**Podpisy odręczne, pieczątki, kody QR.** Checkbox „Zamazać również podpisy odręczne, pieczątki i obrazy”
+**Podpisy odręczne, pieczątki, kody QR.** Przełącznik „Zamaż też podpisy odręczne, pieczątki i obrazy”
 (domyślnie włączony) wycina z wgranego PDF-a wszystkie osadzone obrazy. Na każdy obraz nakładana jest
 adnotacja redakcyjna, a `apply_redactions(images=PDF_REDACT_IMAGE_REMOVE, text=PDF_REDACT_TEXT_NONE)`
 fizycznie usuwa go z pliku. Tekstu ten krok nie rusza, dlatego nie wraca błąd z przesuwaniem liter.
 Potem strona jest spłaszczana jak wcześniej, więc w wyniku każda strona to jeden obraz całej strony.
-Ograniczenie: podpis zapisany jako grafika wektorowa (linie), a nie obraz, nie jest wykrywany.
+
+**Podpisy wektorowe.** Podpis narysowany liniami (tablet, część platform e-podpisu, edytor PDF) nie jest
+obrazem, więc wycinanie obrazów go nie usuwało. [engine/signatures.py](engine/signatures.py) rozpoznaje go
+po kształcie ścieżek: ciągłe pociągnięcia z wieloma odcinkami, w większości ukośne, z powrotami pióra w lewo
+(pętle liter). Ramki tabel, podkreślenia, wykresy liniowe i kołowe oraz gęste kreskowanie nie spełniają tych
+warunków. Wykryty podpis dostaje pasek wypalony w pikselach. Koszt: 3–7 ms na stronę przykładowych PDF-ów,
+bez modelu. Ograniczenie: podpis zapisany jako **wypełniony** kontur liter jest pomijany, bo tak wyglądają też
+logo i wykresy.
 
 **Skany z warstwą OCR.** Obraz zajmujący co najmniej połowę strony to tło albo skan, a nie podpis,
 więc nie jest zamazywany. Wcześniej zeskanowane pismo (każda strona = obraz A4 300 dpi) wychodziło
 całkowicie czarne. Na takich stronach małe obrazy usuwamy trybem `PDF_REDACT_IMAGE_PIXELS`, bo tryb REMOVE
-skasowałby cały skan, którego dotyka. Paski na tekście działają dzięki warstwie OCR. Podpis odręczny
-**wewnątrz** skanu nie jest osobnym obrazem i nie zostanie wykryty.
+skasowałby cały skan, którego dotyka. Paski na tekście działają dzięki warstwie OCR.
+
+**Podpisy wewnątrz skanu.** Podpis na skanie nie jest osobnym obrazem ani ścieżką – to zwykłe piksele.
+Bez modelu i bez pobierania czegokolwiek: przy słowie „podpis” („Podpis:”, „(podpis)”, „Podpisy”, „signature”)
+z warstwy tekstowej skanu albo z OCR bierzemy okolicę, czyścimy w niej piksele rozpoznanego tekstu, linie
+do podpisu („……”, „____”) i drobne plamki, a to, co zostało ciemnego, to pismo odręczne i dostaje pasek.
+„Niżej podpisany” ani „podpisania” nie są kotwicą – to treść pisma. Działa tylko na stronach-skanach,
+na obrazie strony, który redaktor i tak renderuje: ok. 75 ms na stronę ze słowem „podpis”, bez niego ~0.
+Ograniczenie: podpis bez żadnego podpisu-etykiety w pobliżu (np. parafa na marginesie) nie zostanie
+wykryty – aplikacja przypomina o sprawdzeniu podglądu skanów.
 
 **Paski nad polami formularza.** W Karcie Podpisów Autenti dane podpisujących (imię, e-mail, NIP, IP)
 leżą pod polami podpisu (widgety PDF) z białym tłem. Te pola są rysowane na wierzchu treści strony i zasłaniały
@@ -189,10 +305,16 @@ który dałoby się usunąć w edytorze PDF.
 także przez złamanie linii. Wcześniejsze `search_for()` szukało podciągów, a tryb awaryjny „słowo po słowie”
 zaczerniał każde „ul.” i „2009”. Na 6-stronicowym skanie było to 844 paski zamiast 123.
 
+**Tekst po skosie (znaki wodne).** Słowo w obróconej linii dostaje pasek w kształcie obróconego czworokąta,
+a nie prostokąt otaczający. Ukośny znak wodny „SPECIMEN” (92 pt) na wyciągu bankowym miał prostokąt
+446 × 387 pt i pasek na nim zakrywał całą tabelę. Blady, półprzezroczysty napis (na białym tle jaśniejszy niż
+200/255) nie dostaje czarnego czworokąta: w jego obrębie wybielamy tylko jasne piksele, więc napis znika,
+a ciemny tekst tabeli, który na nim leży, zostaje czytelny.
+
 ## Architektura hybrydowa
 
 ```
- tekst z PII (plik → engine/file_reader + engine/ocr: OCR tylko na obrazach PDF)
+ tekst z PII (plik → engine/file_reader + engine/ocr: OCR tylko na obrazach PDF i .docx)
      │
      ▼
 ┌─────────────────────┐   normalizacja Unicode (NFKC, znaki niewidoczne, myślniki)
@@ -238,6 +360,8 @@ zaczerniał każde „ul.” i „2009”. Na 6-stronicowym skanie było to 844 
 | Dopasowanie odmiany osób | Model 3B „poprawia” odmianę („Piotr Wiśniewski” zamiast „Piotra Wiśniewskiego”). Python szuka rdzeni słów i maskuje tylko formy, które naprawdę są w tekście. Każda forma ma własny token, więc przywracanie jest dokładne co do litery. |
 | Bezpieczniki przeciw pętli | Model 3B przy `temperature 0` potrafi się zapętlić: na krótkim pliku wygenerował 8800 tokenów zamiast ~150, a po 3 minutach wynik przepadł. Teraz `maxItems: 20` w JSON Schema (grammar Ollamy sam zamyka listę), `num_predict: 600`, limit czasu 60 s na fragment. Z uciętej odpowiedzi ratujemy kompletne encje. |
 | `keep_alive: 30m`, `num_ctx: 3072` | Model nie jest zwalniany z pamięci między kliknięciami w demo. Kontekst mieści prompt z 3 przykładami (~800 tokenów), fragment i odpowiedź; domyślne 4096+ zużywałoby więcej RAM-u. |
+| `127.0.0.1` zamiast `localhost` | Windows rozwiązuje `localhost` najpierw na IPv6 (`::1`), a Ollama słucha tylko na `127.0.0.1` – **każde** zapytanie czekało ok. 2,1 s na nieudaną próbę. Przy 4–6 zapytaniach na dokument to 8–12 s straty. Teraz adres jest domyślnie `127.0.0.1`, a wpisane `localhost` jest na nie zamieniane. Mediana czasu dokumentu (Regex + NER + LLM, GPU): **~15 s → ~7,6 s**, wyniki bez zmian. |
+| Bez zapytań równoległych | Ollama i tak przetwarza je kolejno (2 i 4 wątki: 7,3–7,4 s wobec 7,6 s), a wynik przestawał być powtarzalny. |
 | Tokeny nietykalne | Podmiana przeskakuje istniejące tokeny. Wcześniej encja „TEL_1” zwrócona przez model psuła token na `[[ADRES_3]]`. |
 | Numeracja w Pythonie | Model podaje tylko kategorię, a `_1`, `_2` nadaje sejf. Ta sama wartość zawsze dostaje ten sam token. |
 | Tolerancyjne `restore` | Rozpoznaje `[ OSOBA_1 ]`, `\[OSOBA_1\]`, `[osoba_1]`, bo tak potrafi przerobić tokeny ChatGPT. Nieznane tokeny zostają i są zgłaszane. |
@@ -246,11 +370,14 @@ zaczerniał każde „ul.” i „2009”. Na 6-stronicowym skanie było to 844 
 ## Struktura
 
 ```
-app.py                  # Streamlit: zakładki Anonimizacja / De-anonimizacja, przykłady,
+app.py                  # Streamlit: karty Anonimizacja / Przywracanie danych, przykłady,
                         # wczytywanie plików, „zostaw jawnie”, pobieranie wyników
-.streamlit/config.toml  # tylko localhost, limit pliku 25 MB, bez telemetrii
+ui.py                   # Komponenty interfejsu: karty, nagłówki sekcji, stany, przyciski destrukcyjne
+.streamlit/config.toml  # tylko localhost, limit pliku 25 MB, bez telemetrii + motyw (paleta, fonty)
 engine/file_reader.py   # Odczyt plików: .txt .md .csv .log .json (UTF-8/cp1250), .pdf, .docx + normalizacja
-engine/ocr.py           # OCR (Tesseract w PyMuPDF) tylko na obrazach w PDF, z pamięcią podręczną
+engine/docx_reader.py   # Word w całości: nagłówki, stopki, przypisy, pola tekstowe, kontrolki, tabele zagnieżdżone
+engine/ocr.py           # OCR (Tesseract w PyMuPDF) tylko na obrazach w PDF i .docx, z pamięcią podręczną
+engine/signatures.py    # Podpisy odręczne: wektorowe (kształt ścieżek) i na skanach (atrament przy „podpis”)
 engine/redactor.py      # PDF z czarnymi paskami w miejscu danych wrażliwych
 engine/regex_masker.py  # Etap 1: wzorce + walidatory sum kontrolnych
 engine/numerals.py      # Liczby zapisane słownie (telefon, kwota, PESEL, data)
@@ -309,8 +436,24 @@ Aplikacja pokazuje te metryki na żywo: czas Regexa, czas LLM-a, liczbę encji, 
 - Model 3B może przeoczyć część firm lub loginów (patrz metryki). Regex nadal chroni wtedy dane o stałym formacie.
 - Tablice rejestracyjne nie mają sumy kontrolnej. Regex wymaga kodu województwa na początku i cyfry w numerze oraz pomija znane słowa (`GET 2000`, `PLN 1000`), ale rzadkie fałszywe trafienia są możliwe.
 - Paszport i dowód z błędną cyfrą kontrolną (np. przykładowy `ABC123456`) celowo nie są maskowane.
-- Propagacja korzysta z całego sejfu sesji. Wartości z wcześniej anonimizowanego dokumentu też zostaną zamaskowane w kolejnym („🗑️ Wyczyść sejf” zaczyna od zera).
+- Propagacja korzysta z całego sejfu sesji. Wartości z wcześniej anonimizowanego dokumentu też zostaną zamaskowane w kolejnym („Wyczyść sejf” zaczyna od zera).
 - Spłaszczony PDF nie ma warstwy tekstowej (nie da się w nim wyszukiwać ani zaznaczać tekstu).
 - Podział na fragmenty wydłuża przetwarzanie długich dokumentów (jedno zapytanie na ~400 znaków).
 - Sejf żyje w pamięci sesji przeglądarki. Żeby wrócić do pracy po zamknięciu karty, zapisz token sejfu.
 - Token sejfu nie jest szyfrowany hasłem: chroni go tylko to, że nikt poza Tobą go nie ma.
+
+## Współpraca, bezpieczeństwo, licencja
+
+- Jak przygotować środowisko, testy, pomiar `eval/` i PR: [CONTRIBUTING.md](CONTRIBUTING.md).
+- Lukę bezpieczeństwa (np. wyciek danych) zgłoś prywatnie: [SECURITY.md](SECURITY.md).
+- Kod projektu jest na licencji **MIT** ([LICENSE](LICENSE)).
+
+Zależności i modele mają własne licencje, które obowiązują niezależnie od naszej:
+
+| Składnik | Licencja |
+|---|---|
+| PyMuPDF (odczyt i zaczernianie PDF, OCR) | **AGPL-3.0** albo komercyjna licencja Artifex – udostępniając aplikację innym (także przez sieć), trzeba spełnić warunki AGPL |
+| qwen2.5:3b (Ollama) | Qwen Research License – sprawdź warunki przed użyciem komercyjnym |
+| GLiNER2-PII (`fastino/gliner2-privacy-filter-PII-multi`), gliner2, peft, PyTorch, Streamlit | Apache-2.0 (PyTorch: BSD-style) |
+| Tesseract i modele `tessdata` | Apache-2.0 |
+| python-docx, pydantic | MIT |

@@ -112,10 +112,14 @@ def test_ipv6_false_positives(vault, text):
 # --- 3. Adres Ollamy tylko lokalny ----------------------------------------------
 
 
-@pytest.mark.parametrize("url", ["http://localhost:11434", "http://127.0.0.1:11434/",
-                                 "http://[::1]:11434", "https://LOCALHOST:8443"])
-def test_local_ollama_urls_are_allowed(url):
-    assert validate_ollama_url(url) == url.rstrip("/")
+@pytest.mark.parametrize("url, expected", [
+    ("http://localhost:11434", "http://127.0.0.1:11434"),   # bez 2 s czekania na IPv6
+    ("http://127.0.0.1:11434/", "http://127.0.0.1:11434"),
+    ("http://[::1]:11434", "http://[::1]:11434"),
+    ("https://LOCALHOST:8443", "https://127.0.0.1:8443"),
+])
+def test_local_ollama_urls_are_allowed(url, expected):
+    assert validate_ollama_url(url) == expected
 
 
 @pytest.mark.parametrize("url", [

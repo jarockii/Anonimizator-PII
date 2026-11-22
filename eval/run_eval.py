@@ -7,6 +7,7 @@ Przykłady (z katalogu projektu):
     python eval/run_eval.py --model qwen3.5:2b --pliki 5 6
     python eval/run_eval.py --bez-llm                # sam Regex + NER (bez Ollamy)
     python eval/run_eval.py --zostaw ZDROWIE         # jak przełącznik „zostaw jawnie”
+    python eval/run_eval.py --zestaw kontrolny       # dokumenty niewidziane przy strojeniu
 
 Wynik: podsumowanie w konsoli i raport Markdown + JSON w eval/wyniki/.
 Wyciek = fragment oznaczonej danej widoczny po anonimizacji (szczegóły: scoring.py).
@@ -32,6 +33,15 @@ from engine.vault import Vault  # noqa: E402
 from scoring import load_annotations, missing_fragments, score_document, visible  # noqa: E402
 
 
+# Zestaw podstawowy służył do strojenia reguł, progów i treningu GLiNER-a,
+# więc wynik na nim jest optymistyczny. Kontrolny – tylko do pomiaru.
+ZESTAWY = {
+    "podstawowy": ["oznaczenia"],
+    "kontrolny": ["oznaczenia_kontrolne"],
+    "wszystkie": ["oznaczenia", "oznaczenia_kontrolne"],
+}
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--model", default=DEFAULT_MODEL, help="model w Ollamie")
@@ -45,6 +55,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--etapy", action="store_true",
                         help="dodatkowo: czy daną ukrył już Regex (R), NER (N) czy dopiero LLM (L)")
     parser.add_argument("--bez-raportu", action="store_true", help="nie zapisuj plików w eval/wyniki")
+    parser.add_argument("--zestaw", choices=sorted(ZESTAWY), default="podstawowy",
+                        help="podstawowy: przyklady/1–8 (na nich stroiliśmy reguły i model); "
+                             "kontrolny: przyklady/kontrolne/ (niewidziane)")
     return parser.parse_args()
 
 
@@ -55,14 +68,16 @@ def main() -> int:
     use_ner = not args.bez_ner and ner_masker.ner_installed()
     use_llm = not args.bez_llm
     keep = set(args.zostaw)
-    annotations = [a for a in load_annotations(ROOT / "eval" / "oznaczenia", ROOT)
+    annotations = [a for folder in ZESTAWY[args.zestaw]
+                   for a in load_annotations(ROOT / "eval" / folder, ROOT)
                    if not args.pliki or any(a.name.startswith(p) for p in args.pliki)]
     if use_ner:
         ner_masker.load_model()
 
     config = (f"model={args.model if use_llm else '—'} · NER={'tak' if use_ner else 'nie'} · "
               f"LLM={'tak' if use_llm else 'nie'} · przebiegi={args.przebiegi}"
-              + (f" · zostaw={','.join(sorted(keep))}" if keep else ""))
+              + (f" · zostaw={','.join(sorted(keep))}" if keep else "")
+              + f" · zestaw={args.zestaw} · NER-model={ner_masker.ner_model_label() if use_ner else '—'}")
     print(f"Konfiguracja: {config}\n")
 
     documents = []
@@ -155,6 +170,8 @@ def score_document_item_visible(item, text: str) -> bool:
 def write_report(args, config, documents, per_category, total, leaked) -> None:
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M")
     model = (args.model if not args.bez_llm else "bez-llm").replace(":", "_")
+    if args.zestaw != "podstawowy":
+        model += f"_{args.zestaw}"
     # Bez with_suffix(): „qwen2.5_3b” ma kropkę i with_suffix ucinał „.5_3b”.
     md_path = ROOT / "eval" / "wyniki" / f"{stamp}_{model}.md"
     json_path = md_path.with_name(f"{stamp}_{model}.json")
