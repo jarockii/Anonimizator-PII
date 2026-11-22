@@ -324,3 +324,19 @@ Aplikacja pokazuje te metryki na żywo: czas Regexa, czas LLM-a, liczbę encji, 
 - Podział na fragmenty wydłuża przetwarzanie długich dokumentów (jedno zapytanie na ~400 znaków).
 - Sejf żyje w pamięci sesji przeglądarki. Żeby wrócić do pracy po zamknięciu karty, zapisz token sejfu.
 - Token sejfu nie jest szyfrowany hasłem: chroni go tylko to, że nikt poza Tobą go nie ma.
+
+## Współpraca, bezpieczeństwo, licencja
+
+- Jak przygotować środowisko, testy, pomiar `eval/` i PR: [CONTRIBUTING.md](CONTRIBUTING.md).
+- Lukę bezpieczeństwa (np. wyciek danych) zgłoś prywatnie: [SECURITY.md](SECURITY.md).
+- Kod projektu jest na licencji **MIT** ([LICENSE](LICENSE)).
+
+Zależności i modele mają własne licencje, które obowiązują niezależnie od naszej:
+
+| Składnik | Licencja |
+|---|---|
+| PyMuPDF (odczyt i zaczernianie PDF, OCR) | **AGPL-3.0** albo komercyjna licencja Artifex – udostępniając aplikację innym (także przez sieć), trzeba spełnić warunki AGPL |
+| qwen2.5:3b (Ollama) | Qwen Research License – sprawdź warunki przed użyciem komercyjnym |
+| GLiNER2-PII (`fastino/gliner2-privacy-filter-PII-multi`), gliner2, peft, PyTorch, Streamlit | Apache-2.0 (PyTorch: BSD-style) |
+| Tesseract i modele `tessdata` | Apache-2.0 |
+| python-docx, pydantic | MIT |
