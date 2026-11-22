@@ -22,3 +22,116 @@ serverAddress = "localhost"
 [client]
 # Pełne ślady błędów mogą zawierać fragmenty przetwarzanego tekstu.
 showErrorDetails = false
+# „viewer”: bez opcji dewelopera (rerun, deploy), ale z przełącznikiem motywu.
+toolbarMode = "viewer"
+
+# --- System projektowy -------------------------------------------------------
+# Paleta (kontrast tekstu sprawdzony wg WCAG 2.1, w nawiasach: na tle Surface):
+#   Primary    #1F2F4D  granat – znak marki, nagłówki sekcji
+#   Secondary  #4B5D78  łupkowy – drugorzędne ikony i akcje
+#   Accent     #2456D6  niebieski – główna akcja na ekranie (6.2:1, biały tekst na nim też 6.2:1)
+#   Background #F5F6F8  tło aplikacji
+#   Surface    #FFFFFF  karty, panele, pola
+#   Text       #111827  tekst główny (17.7:1), Primary 13.4:1, Secondary 6.7:1
+#   Text 2     #4B5563  tekst pomocniczy (7.6:1)
+#   Border     #E2E5EA  subtelne obramowania
+#   Success #15803D (5.0:1) · Warning #B45309 (5.0:1) · Error #B91C1C (6.5:1) · Info #1D4ED8 (6.7:1)
+# Fonty: Inter, jeśli jest w systemie; inaczej Segoe UI Variable (Windows),
+# SF (macOS), Roboto (Linux). Bez Google Fonts – przeglądarka nie łączy się
+# z żadnym serwerem poza tym komputerem.
+[theme]
+# Wspólne dla obu motywów: kształt, fonty, rozmiary.
+showWidgetBorder = true
+showSidebarBorder = true
+linkUnderline = false
+baseRadius = "8px"
+buttonRadius = "8px"
+baseFontSize = 15
+baseFontWeight = 400
+font = "Inter, Segoe UI Variable Text, Segoe UI, -apple-system, BlinkMacSystemFont, Roboto, sans-serif"
+headingFont = "Inter, Segoe UI Variable Display, Segoe UI, -apple-system, BlinkMacSystemFont, Roboto, sans-serif"
+codeFont = "Cascadia Mono, Consolas, SFMono-Regular, Menlo, monospace"
+codeFontSize = "13px"
+headingFontSizes = ["26px", "20px", "17px", "15px", "14px", "13px"]
+headingFontWeights = [650, 600, 600, 600, 600, 600]
+metricValueFontSize = "24px"
+metricValueFontWeight = 600
+
+# Motyw jasny i ciemny: Streamlit domyślnie wybiera ten z ustawień systemu,
+# a użytkownik może go zmienić w menu (⋮ -> Settings).
+[theme.light]
+primaryColor = "#2456D6"
+backgroundColor = "#F5F6F8"
+secondaryBackgroundColor = "#EEF1F5"
+textColor = "#111827"
+linkColor = "#2456D6"
+borderColor = "#E2E5EA"
+codeBackgroundColor = "#F3F5F8"
+dataframeHeaderBackgroundColor = "#F3F5F8"
+dataframeBorderColor = "#E2E5EA"
+redColor = "#B91C1C"
+redBackgroundColor = "#FDF2F2"
+redTextColor = "#991B1B"
+orangeColor = "#B45309"
+orangeBackgroundColor = "#FFF7EB"
+orangeTextColor = "#92400E"
+yellowColor = "#B45309"
+yellowBackgroundColor = "#FFF7EB"
+yellowTextColor = "#92400E"
+greenColor = "#15803D"
+greenBackgroundColor = "#F0FAF3"
+greenTextColor = "#166534"
+blueColor = "#1D4ED8"
+blueBackgroundColor = "#EFF4FF"
+blueTextColor = "#1E40AF"
+grayColor = "#4B5563"
+grayBackgroundColor = "#F3F4F6"
+grayTextColor = "#374151"
+violetColor = "#4B5D78"
+violetBackgroundColor = "#EEF1F6"
+violetTextColor = "#1F2F4D"
+
+[theme.light.sidebar]
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F5F6F8"
+borderColor = "#E2E5EA"
+
+# Ciemny (kontrast na tle kart #161C25): tekst 14.2:1, pomocniczy 7.6:1,
+# link 7.2:1, biały tekst na przycisku #3B6FE0 4.6:1, komunikaty na swoim tle 8.9–11.5:1.
+[theme.dark]
+primaryColor = "#3B6FE0"
+backgroundColor = "#0F141B"
+secondaryBackgroundColor = "#1E2631"
+textColor = "#E6EAF0"
+linkColor = "#7FA6FF"
+borderColor = "#2B3442"
+codeBackgroundColor = "#1A212B"
+codeTextColor = "#E6EAF0"
+dataframeHeaderBackgroundColor = "#1E2631"
+dataframeBorderColor = "#2B3442"
+redColor = "#F87171"
+redBackgroundColor = "#2A1517"
+redTextColor = "#FCA5A5"
+orangeColor = "#FBBF24"
+orangeBackgroundColor = "#2A2111"
+orangeTextColor = "#FCD34D"
+yellowColor = "#FBBF24"
+yellowBackgroundColor = "#2A2111"
+yellowTextColor = "#FCD34D"
+greenColor = "#4ADE80"
+greenBackgroundColor = "#11251A"
+greenTextColor = "#86EFAC"
+blueColor = "#60A5FA"
+blueBackgroundColor = "#13203A"
+blueTextColor = "#93C5FD"
+grayColor = "#A3AEBD"
+grayBackgroundColor = "#1E2631"
+grayTextColor = "#C7D0DC"
+violetColor = "#A3B3CC"
+violetBackgroundColor = "#1C2433"
+violetTextColor = "#C7D2E3"
+
+[theme.dark.sidebar]
+backgroundColor = "#131921"
+secondaryBackgroundColor = "#1E2631"
+borderColor = "#2B3442"

@@ -147,6 +147,47 @@ pokazuje sumę i ostrzega, gdy model jest za duży (np. qwen3.5:4b ma 4,21 mld �
 - Regex wykrywa też karty płatnicze (suma Luhna), klucze PEM, tokeny GitHub/Slack/Google/Stripe
   i adresy IPv6.
 
+## Interfejs
+
+Spokojny, „produktowy” wygląd bez emoji i dekoracji. Motyw jest w `.streamlit/config.toml`,
+a to, czego motyw nie obejmuje (karty, przyciski destrukcyjne, rytm odstępów), w [ui.py](ui.py).
+
+| Token | Kolor | Użycie |
+|---|---|---|
+| Primary | `#1F2F4D` | znak marki, nagłówki |
+| Secondary | `#4B5D78` | drugorzędne ikony i akcje |
+| Accent | `#2456D6` | główna akcja na ekranie („Anonimizuj”, „Przywróć dane”) |
+| Background / Surface | `#F5F6F8` / `#FFFFFF` | tło aplikacji / karty, panele, okna |
+| Text / Text secondary | `#111827` / `#4B5563` | tekst główny / pomocniczy |
+| Border | `#E2E5EA` | obramowania kart i pól |
+| Success / Warning / Error / Info | `#15803D` / `#B45309` / `#B91C1C` / `#1D4ED8` | stany i komunikaty |
+
+Każdy kolor tekstu ma kontrast **≥ 4,5:1** (WCAG 2.1 AA) na tle, na którym występuje – policzony, nie na oko
+(np. akcent 6,2:1, tekst pomocniczy 7,6:1, komunikat błędu 7,6:1 na swoim tle). Pilnuje tego test `tests/test_ui.py`.
+
+**Motyw ciemny.** Ta sama struktura tokenów w odcieniach granatu: tło `#0F141B`, karty `#161C25`, tekst `#E6EAF0`
+(14,2:1), pomocniczy `#A3AEBD` (7,6:1), akcent `#3B6FE0` (biały tekst 4,6:1), komunikaty na swoim tle 8,9–11,5:1.
+Domyślnie aplikacja idzie za ustawieniem systemu, a w menu (⋮) można wybrać jasny lub ciemny. Streamlit nie oznacza
+aktywnego motywu w stronie, a `st.context.theme` przy pierwszym wczytaniu podawał zły typ, więc motyw kart rozpoznaje
+mały, stały skrypt po jasności tła aplikacji – działa też po ręcznej zmianie w menu.
+
+- **Ikony:** wyłącznie Material Symbols Rounded (`:material/nazwa:`), wbudowane w Streamlit – działają offline,
+  jedna biblioteka, jedna grubość linii.
+- **Typografia:** Inter, jeśli jest zainstalowany; inaczej Segoe UI Variable (Windows), SF (macOS), Roboto (Linux).
+  Celowo bez Google Fonts – przeglądarka nie łączy się z żadnym serwerem poza tym komputerem. Skala nagłówków
+  26 / 20 / 17 / 15 px, tekst 15 px, kod 13 px.
+- **Komponenty:** przyciski główne (akcent), drugorzędne (obramowane), trzeciorzędne (tekstowe) i destrukcyjne
+  (czerwone, zawsze z oknem potwierdzenia); karty z jednolitym promieniem 12 px i odstępami 4/8/12/16/24 px;
+  okna dialogowe (token sejfu, czyszczenie sejfu); powiadomienia (toast po anonimizacji); puste stany, które
+  mówią, co się w danym miejscu pojawi.
+- **Postęp:** anonimizacja działa w tle, a pasek odświeża się co 0,25 s z licznikiem sekund
+  („Model językowy: fragment 2 z 5 · 12 s”). Po 20 s pojawia się „Wciąż analizuję…” z wyjaśnieniem (pierwszy start
+  wczytuje modele), po 60 s – podpowiedź o trybie oszczędzania energii. Wcześniej pasek ruszał się dopiero po
+  skończonym fragmencie i przy pierwszym starcie wyglądał na zawieszony.
+- **Nawigacja:** dwie karty – *Anonimizacja* i *Przywracanie danych*; panel boczny ze stanem systemu
+  (LLM, NER, OCR, limit parametrów), etapami wykrywania, „Zostaw jawnie”, ustawieniami zaawansowanymi i sejfem.
+- Na telefonie (390 px) bez przewijania w poziomie; karty zmniejszają marginesy wewnętrzne.
+
 ## Pliki
 
 Tekst można wkleić, wybrać przypadek testowy albo wczytać plik: `.txt`, `.md`, `.csv`, `.log`, `.json`,
@@ -199,7 +240,7 @@ w formatach wektorowych Worda (EMF/WMF) nie są odczytywane – wstrzymują wyni
 
 PDF jest czytany **strona po stronie** (`page.get_text("text", sort=True)`), więc tabele, kolumny
 i pieczęcie z Karty Podpisów (np. Autenti) wychodzą w kolejności czytania. Rozwijana sekcja
-„🔍 Co odczytano z pliku” pokazuje dokładnie, co odczytał parser, z podziałem na strony.
+„Co odczytano z pliku” pokazuje dokładnie, co odczytał parser, z podziałem na strony.
 Tekst jest normalizowany: myślnik zapisany w PDF jako SOFT HYPHEN (U+00AD) zamieniamy na „-”.
 Bez tego NIP, UUID i daty z Karty Podpisów wyglądały poprawnie, ale regex ich nie widział.
 
@@ -207,7 +248,7 @@ Bez tego NIP, UUID i daty z Karty Podpisów wyglądały poprawnie, ale regex ich
 
 Zamiast tabeli mapowań (token → oryginał) aplikacja pokazuje **jeden token**, np. `PIIVAULT1.eNpF…`,
 który zawiera cały sejf: JSON → kompresja zlib → base64 plus suma kontrolna CRC32.
-Żeby odszyfrować odpowiedź AI, wklej ją w zakładce 2 razem z tokenem. Działa to także po zamknięciu
+Żeby odszyfrować odpowiedź AI, wklej ją na karcie „Przywracanie danych” razem z tokenem. Działa to także po zamknięciu
 karty przeglądarki albo na innym komputerze, a dalsza anonimizacja z tym samym sejfem daje te same tokeny.
 
 ⚠️ To **nie jest szyfrowanie**: token jest kluczem do danych, więc kto go ma, odczyta oryginały.
@@ -227,7 +268,7 @@ Paski nie są nakładką na tekst: prawdziwych danych nie ma w pliku, więc nie 
 
 Wartości, których nie udało się znaleźć w PDF, aplikacja wypisuje do ręcznego sprawdzenia.
 
-**Podpisy odręczne, pieczątki, kody QR.** Checkbox „Zamazać również podpisy odręczne, pieczątki i obrazy”
+**Podpisy odręczne, pieczątki, kody QR.** Przełącznik „Zamaż też podpisy odręczne, pieczątki i obrazy”
 (domyślnie włączony) wycina z wgranego PDF-a wszystkie osadzone obrazy. Na każdy obraz nakładana jest
 adnotacja redakcyjna, a `apply_redactions(images=PDF_REDACT_IMAGE_REMOVE, text=PDF_REDACT_TEXT_NONE)`
 fizycznie usuwa go z pliku. Tekstu ten krok nie rusza, dlatego nie wraca błąd z przesuwaniem liter.
@@ -329,9 +370,10 @@ a ciemny tekst tabeli, który na nim leży, zostaje czytelny.
 ## Struktura
 
 ```
-app.py                  # Streamlit: zakładki Anonimizacja / De-anonimizacja, przykłady,
+app.py                  # Streamlit: karty Anonimizacja / Przywracanie danych, przykłady,
                         # wczytywanie plików, „zostaw jawnie”, pobieranie wyników
-.streamlit/config.toml  # tylko localhost, limit pliku 25 MB, bez telemetrii
+ui.py                   # Komponenty interfejsu: karty, nagłówki sekcji, stany, przyciski destrukcyjne
+.streamlit/config.toml  # tylko localhost, limit pliku 25 MB, bez telemetrii + motyw (paleta, fonty)
 engine/file_reader.py   # Odczyt plików: .txt .md .csv .log .json (UTF-8/cp1250), .pdf, .docx + normalizacja
 engine/docx_reader.py   # Word w całości: nagłówki, stopki, przypisy, pola tekstowe, kontrolki, tabele zagnieżdżone
 engine/ocr.py           # OCR (Tesseract w PyMuPDF) tylko na obrazach w PDF i .docx, z pamięcią podręczną
@@ -394,7 +436,7 @@ Aplikacja pokazuje te metryki na żywo: czas Regexa, czas LLM-a, liczbę encji, 
 - Model 3B może przeoczyć część firm lub loginów (patrz metryki). Regex nadal chroni wtedy dane o stałym formacie.
 - Tablice rejestracyjne nie mają sumy kontrolnej. Regex wymaga kodu województwa na początku i cyfry w numerze oraz pomija znane słowa (`GET 2000`, `PLN 1000`), ale rzadkie fałszywe trafienia są możliwe.
 - Paszport i dowód z błędną cyfrą kontrolną (np. przykładowy `ABC123456`) celowo nie są maskowane.
-- Propagacja korzysta z całego sejfu sesji. Wartości z wcześniej anonimizowanego dokumentu też zostaną zamaskowane w kolejnym („🗑️ Wyczyść sejf” zaczyna od zera).
+- Propagacja korzysta z całego sejfu sesji. Wartości z wcześniej anonimizowanego dokumentu też zostaną zamaskowane w kolejnym („Wyczyść sejf” zaczyna od zera).
 - Spłaszczony PDF nie ma warstwy tekstowej (nie da się w nim wyszukiwać ani zaznaczać tekstu).
 - Podział na fragmenty wydłuża przetwarzanie długich dokumentów (jedno zapytanie na ~400 znaków).
 - Sejf żyje w pamięci sesji przeglądarki. Żeby wrócić do pracy po zamknięciu karty, zapisz token sejfu.

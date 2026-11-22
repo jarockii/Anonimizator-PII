@@ -247,6 +247,10 @@ def detect_entities(
     base_url = validate_ollama_url(base_url)
     chunks = split_into_chunks(text)
     entities: list[Entity] = []
+    if on_progress:
+        # Od razu: interfejs pokazuje „fragment 1 z N”, zanim model skończy
+        # pierwszy fragment (przy pierwszym starcie trwa to kilkanaście sekund).
+        on_progress(0, len(chunks))
     for number, chunk in enumerate(chunks, start=1):
         entities.extend(_detect_in_chunk(chunk, model, base_url, timeout))
         if on_progress:

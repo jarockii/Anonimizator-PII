@@ -366,7 +366,8 @@ def test_progress_callback_reports_every_chunk(monkeypatch):
     detect_entities(text, on_progress=lambda done, total: calls.append((done, total)))
     total = calls[-1][1]
     assert total > 1
-    assert calls == [(n, total) for n in range(1, total + 1)]
+    # (0, N) od razu – interfejs pokazuje „fragment 1 z N”, zanim model skończy pierwszy.
+    assert calls == [(n, total) for n in range(0, total + 1)]
 
 
 def test_detect_entities_rejects_wrong_category(monkeypatch):
