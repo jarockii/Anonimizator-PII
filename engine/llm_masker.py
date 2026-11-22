@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field, ValidationError
 from engine.file_reader import PAGE_BREAK
 from engine.vault import TOKEN_BODY, Vault, value_pattern
 
-OLLAMA_URL = "http://localhost:11434"
+OLLAMA_URL = "http://127.0.0.1:11434"
 DEFAULT_MODEL = "qwen2.5:3b"
 
 # Literal -> w JSON Schema staje się "enum", więc model może wybrać
@@ -108,7 +108,13 @@ def validate_ollama_url(base_url: str) -> str:
             f"Adres „{host}” nie jest lokalny. Dozwolone: localhost, 127.0.0.1, ::1 "
             "– inaczej dane wrażliwe opuściłyby komputer."
         )
-    return base_url.strip().rstrip("/")
+    url = base_url.strip().rstrip("/")
+    if host.lower() == "localhost":
+        # Windows rozwiązuje „localhost” najpierw na IPv6 (::1), a Ollama słucha
+        # tylko na 127.0.0.1 – każde połączenie czekało ok. 2,1 s na nieudaną
+        # próbę. Przy 4–6 zapytaniach na dokument to 8–12 s straty.
+        url = url.replace(parsed.netloc, parsed.netloc.lower().replace("localhost", "127.0.0.1", 1), 1)
+    return url
 
 
 SYSTEM_PROMPT = """Jesteś systemem wykrywania danych osobowych (PII) w polskich tekstach.
