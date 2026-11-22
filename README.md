@@ -152,6 +152,16 @@ pokazuje sumę i ostrzega, gdy model jest za duży (np. qwen3.5:4b ma 4,21 mld �
 Tekst można wkleić, wybrać przypadek testowy albo wczytać plik: `.txt`, `.md`, `.csv`, `.log`, `.json`,
 `.pdf`, `.docx` (także tabele i obrazy w Wordzie). Pliki są czytane w pamięci i nigdzie nie zapisywane.
 Odpowiedź AI też można wczytać z pliku. Zanonimizowany i przywrócony tekst można pobrać jako `.txt`.
+
+**Word (`.docx`) w całości** ([engine/docx_reader.py](engine/docx_reader.py)). Zwykłe `document.paragraphs`
+z python-docx pomija sporo miejsc, w których w pismach stoją dane, więc czytamy XML sami, w kolejności dokumentu:
+nagłówki, treść, przypisy dolne i końcowe, stopki. W treści także pola tekstowe (pieczątka jako kształt),
+kontrolki formularza („Najemca: [pole]” – w akapicie i jako blok) i tabele zagnieżdżone w komórkach.
+Pole tekstowe Word zapisuje dwa razy (DrawingML + kopia VML dla starych wersji) – kopię pomijamy, inaczej tekst
+byłby podwojony. Scalona komórka nie jest już powtarzana w każdej kolumnie, a tekst usunięty w śledzeniu zmian
+nie trafia do wyniku. Na pliku testowym z tymi elementami wcześniej znikało 8 z 8 danych – teraz każda jest
+odczytana dokładnie raz. Komentarze recenzentów i metadane (autor pliku) nie są czytane.
+
 ### 🖼️ OCR tylko na obrazach
 
 Skany, pieczątki i zdjęcia dokumentów w PDF są odczytywane przez OCR (Tesseract przez PyMuPDF,
@@ -175,8 +185,9 @@ ale gdy PDF ma obrazy z możliwym tekstem, wynik jest wstrzymany do ręcznego sp
 
 **Obrazy w Wordzie (`.docx`).** OCR przechodzi też po obrazach wstawionych w treść dokumentu
 (zdjęcie dowodu, zeskanowana pieczątka, zrzut ekranu – także w komórkach tabeli). Rozpoznany tekst
-trafia **zaraz po akapicie albo wierszu tabeli z obrazem**, więc model widzi go w kontekście
-(„Skan dowodu w załączniku:” + treść dowodu). Ten sam obraz wstawiony kilka razy (logo) jest rozpoznawany raz.
+trafia **zaraz po akapicie z obrazem**, więc model widzi go w kontekście
+(„Skan dowodu w załączniku:” + treść dowodu); obraz w komórce tabeli – w tej komórce. Obrazy są czytane
+także z nagłówków, stopek, pól tekstowych i przypisów. Ten sam obraz wstawiony kilka razy (logo) jest rozpoznawany raz.
 Obraz nie ma tu rozmiaru na stronie, więc:
 
 - pomijane są obrazy mniejsze niż 40 × 16 px (punktory, ikony),
@@ -184,8 +195,7 @@ Obraz nie ma tu rozmiaru na stronie, więc:
   dawał „PESEL 92031802349” (zła cyfra, więc Regex go nie łapał), a z powiększeniem jest bezbłędny.
 
 Bez Tesseracta wynik dla `.docx` z obrazami jest wstrzymany do sprawdzenia, jak przy PDF. Obrazy
-w formatach wektorowych Worda (EMF/WMF) i obrazy w nagłówkach i stopkach nie są jeszcze odczytywane –
-EMF/WMF w treści wstrzymuje wynik jako błąd OCR.
+w formatach wektorowych Worda (EMF/WMF) nie są odczytywane – wstrzymują wynik jako błąd OCR.
 
 PDF jest czytany **strona po stronie** (`page.get_text("text", sort=True)`), więc tabele, kolumny
 i pieczęcie z Karty Podpisów (np. Autenti) wychodzą w kolejności czytania. Rozwijana sekcja
@@ -321,6 +331,7 @@ app.py                  # Streamlit: zakładki Anonimizacja / De-anonimizacja, p
                         # wczytywanie plików, „zostaw jawnie”, pobieranie wyników
 .streamlit/config.toml  # tylko localhost, limit pliku 25 MB, bez telemetrii
 engine/file_reader.py   # Odczyt plików: .txt .md .csv .log .json (UTF-8/cp1250), .pdf, .docx + normalizacja
+engine/docx_reader.py   # Word w całości: nagłówki, stopki, przypisy, pola tekstowe, kontrolki, tabele zagnieżdżone
 engine/ocr.py           # OCR (Tesseract w PyMuPDF) tylko na obrazach w PDF i .docx, z pamięcią podręczną
 engine/signatures.py    # Podpisy odręczne: wektorowe (kształt ścieżek) i na skanach (atrament przy „podpis”)
 engine/redactor.py      # PDF z czarnymi paskami w miejscu danych wrażliwych

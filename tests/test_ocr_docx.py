@@ -74,9 +74,9 @@ def test_tables_keep_their_position_and_images_in_cells_are_read():
     table.rows[0].cells[1].paragraphs[0].add_run().add_picture(io.BytesIO(image_png()), width=Cm(4))
     document.add_paragraph("§1 Przedmiot umowy")
     lines = read_docx(save(document)).splitlines()
-    assert lines[:2] == ["Strony umowy:", "Pieczątka | "]
-    assert lines[2:4] == ["Jan Kowalski", "PESEL 92031502349"]
-    assert lines[-1] == "§1 Przedmiot umowy"
+    # Tekst z obrazu trafia do TEJ komórki, w której obraz stoi.
+    assert lines == ["Strony umowy:", "Pieczątka | Jan Kowalski PESEL 92031502349",
+                     "§1 Przedmiot umowy"]
 
 
 def test_same_image_twice_is_ocr_once(fake_tesseract):

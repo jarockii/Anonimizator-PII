@@ -25,7 +25,6 @@ każdy różny obraz raz, a tekst trafia w miejsce obrazu (ocr_docx).
 """
 
 import hashlib
-import io
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -33,8 +32,8 @@ from functools import lru_cache
 from pathlib import Path
 
 import pymupdf
-from docx import Document
-from docx.oxml.ns import qn
+
+from engine import docx_reader
 
 # Język Tesseracta. „pol” zna polskie znaki (ą, ę, ł…), „eng” dobrze czyta
 # e-maile, kody i identyfikatory – razem dają najlepszy wynik.
@@ -256,26 +255,6 @@ def ocr_document(document: pymupdf.Document) -> OcrReport:
 
 # --- Word (.docx) ----------------------------------------------------------
 
-# Obraz w treści dokumentu: <a:blip r:embed> (DrawingML, zwykłe „Wstaw obraz”)
-# albo <v:imagedata r:id> (VML – starsze pliki i obrazy z .doc).
-# (python-docx nie zna przestrzeni nazw VML, więc ta jest zapisana wprost.)
-_IMAGE_REFS = ((qn("a:blip"), qn("r:embed")),
-               ("{urn:schemas-microsoft-com:vml}imagedata", qn("r:id")))
-
-
-def docx_image_parts(element, part) -> list:
-    """Obrazy wstawione w danym fragmencie XML (akapit, wiersz tabeli, całe ciało)
-    w kolejności występowania – jako części pakietu .docx (mają .partname i .blob)."""
-    parts = []
-    for tag, attribute in _IMAGE_REFS:
-        for node in element.iter(tag):
-            rel_id = node.get(attribute)
-            target = part.related_parts.get(rel_id) if rel_id else None
-            if target is not None and hasattr(target, "blob"):
-                parts.append(target)
-    return parts
-
-
 def _prepare_image(blob: bytes) -> pymupdf.Pixmap:
     """Obraz z pliku -> pixmapa RGB bez przezroczystości, w rozmiarze dobrym dla OCR.
 
@@ -306,13 +285,16 @@ def _relative_to_text(words: list[RelativeWord]) -> str:
 def ocr_docx_document(document) -> OcrReport:
     """OCR obrazów w otwartym dokumencie Word (bez pamięci podręcznej plików).
 
-    Tylko obrazy w treści (także w tabelach). Ten sam obraz wstawiony kilka
+    Obrazy z treści, tabel, pól tekstowych, nagłówków, stopek i przypisów
+    (engine/docx_reader.stories). Ten sam obraz wstawiony kilka
     razy (logo) jest jedną częścią pakietu – rozpoznajemy go raz.
     """
     report = OcrReport()
     start = time.perf_counter()
     available = ocr_available()
-    for image in docx_image_parts(document.element.body, document.part):
+    images = [image for story in docx_reader.stories(document)
+              for image in docx_reader.image_parts(story.element, story.part)]
+    for image in images:
         report.images_total += 1
         name = str(image.partname)
         if name in report.image_texts:
@@ -371,7 +353,7 @@ def ocr_pdf(pdf_bytes: bytes) -> OcrReport:
 
 def ocr_docx(docx_bytes: bytes) -> OcrReport:
     """OCR obrazów w .docx; wynik zapamiętany jak dla PDF."""
-    return _cached(docx_bytes, lambda: ocr_docx_document(Document(io.BytesIO(docx_bytes))))
+    return _cached(docx_bytes, lambda: ocr_docx_document(docx_reader.open_document(docx_bytes)))
 
 
 def clear_cache() -> None:
