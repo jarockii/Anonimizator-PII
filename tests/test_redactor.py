@@ -8,6 +8,7 @@ Sprawdzamy dwie rzeczy:
 import pymupdf
 
 from engine.redactor import (
+    page_words,
     page_count,
     redact_pdf,
     redact_text_to_pdf,
@@ -154,3 +155,66 @@ def test_flattened_pdf_finds_polish_uppercase_and_soft_hyphens():
     result = redact_pdf(original, ["Tomasz Wiśniewski", "526-025-02-74"])
     assert result.missing == []
     assert result.bars == 2
+
+
+# --- Tekst obrócony (ukośny znak wodny) ------------------------------------------
+
+def _rotated_pdf(color=(0, 0, 0), fill_opacity=1.0) -> bytes:
+    """Tabela z ukośnym napisem „SPECIMEN” na środku (jak wyciąg bankowy)."""
+    import math
+
+    document = pymupdf.open()
+    page = document.new_page(width=595, height=842)
+    for row in range(20):
+        page.insert_text((60, 250 + row * 16), f"Wiersz {row:02d}   Kwota 1{row:02d},00", fontsize=10)
+    writer = pymupdf.TextWriter(page.rect, opacity=fill_opacity, color=color)
+    writer.append((120, 560), "SPECIMEN", fontsize=80)
+    writer.write_text(page, morph=(pymupdf.Point(120, 560), pymupdf.Matrix(-38)))
+    return document.tobytes()
+
+
+def _black_share(pdf: bytes, clip=None) -> float:
+    import numpy as np
+
+    page = pymupdf.open(stream=pdf, filetype="pdf")[0]
+    pixmap = page.get_pixmap(dpi=50, clip=clip)
+    pixels = np.frombuffer(pixmap.samples, dtype=np.uint8).reshape(-1, pixmap.n)[:, :3]
+    return float((pixels.max(axis=1) < 40).mean())
+
+
+def test_rotated_word_gets_rotated_bar_not_page_wide_rectangle():
+    # Wcześniej pasek = prostokąt otaczający ukośne słowo -> zakryta cała tabela.
+    pdf = _rotated_pdf()
+    page = pymupdf.open(stream=pdf, filetype="pdf")[0]
+    word = next(w for w in page_words(page) if w.key == "specimen")
+    assert word.quad is not None and word.quad.faint_level is None
+    result = redact_pdf(pdf, ["SPECIMEN"])
+    assert result.bars == 1 and result.missing == []
+    box = word.rect
+    assert box.get_area() > 60_000                         # prostokąt otaczający jest ogromny
+    assert _black_share(result.pdf, box) < 0.6               # a pasek zajmuje tylko pas napisu
+    assert "SPECIMEN" not in pymupdf.open(stream=result.pdf, filetype="pdf")[0].get_text()
+
+
+def test_faint_rotated_watermark_is_erased_and_table_stays_readable():
+    pdf = _rotated_pdf(color=(0.55, 0.55, 0.55), fill_opacity=0.16)
+    page = pymupdf.open(stream=pdf, filetype="pdf")[0]
+    word = next(w for w in page_words(page) if w.key == "specimen")
+    assert word.quad.faint_level is not None
+    result = redact_pdf(pdf, ["SPECIMEN"])
+    assert _black_share(result.pdf) < 0.01                   # żadnego czarnego pasa
+    import numpy as np
+
+    def levels(document_bytes):
+        pixmap = pymupdf.open(stream=document_bytes, filetype="pdf")[0].get_pixmap(dpi=100)
+        return np.frombuffer(pixmap.samples, dtype=np.uint8).reshape(-1, pixmap.n)[:, :3].min(axis=1)
+
+    before, after = levels(pdf), levels(result.pdf)
+    # Ta sama strona bez napisu, spłaszczona tak samo – jej jasnoszare piksele
+    # to tylko wygładzone krawędzie liter tabeli.
+    baseline = levels(redact_pdf(_rotated_pdf(color=(1, 1, 1), fill_opacity=0.0), []).pdf)
+    gray = lambda pixels: int(((pixels > 190) & (pixels < 250)).sum())  # noqa: E731
+    assert gray(before) > 2 * gray(baseline)                 # napis był wyraźny…
+    assert gray(after) <= 1.02 * gray(baseline)              # …a po wybieleniu nic z niego nie zostało
+    # …a ciemny tekst tabeli (także ten, który leżał na napisie) został.
+    assert (after < 120).sum() > 0.9 * (before < 120).sum()

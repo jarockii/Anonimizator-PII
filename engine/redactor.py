@@ -138,16 +138,85 @@ class PageWord:
     rect: pymupdf.Rect      # położenie na stronie
     line: tuple             # (blok, linia) – do łączenia słów w jeden pasek;
                             # słowa z OCR: („ocr”, nr obrazu, blok, linia)
+    quad: "QuadBar | None" = None   # tylko tekst obrócony (np. ukośny znak wodny)
+
+
+@dataclass
+class QuadBar:
+    """Pasek na słowie pisanym po skosie: obrócony czworokąt.
+
+    faint_level: dla bladego, półprzezroczystego napisu (typowy znak wodny)
+    – jasność, jaką ma on na białym tle. Wtedy zamiast czarnego czworokąta
+    wybielamy w nim tylko jasne piksele: napis znika, a ciemny tekst
+    tabeli pod nim zostaje czytelny.
+    """
+    quad: pymupdf.Quad
+    faint_level: int | None = None
+
+    def __mul__(self, matrix):
+        return QuadBar(self.quad * matrix, self.faint_level)
+
+
+# Linia, której kierunek odchyla się od poziomu bardziej niż o ok. 1°, jest
+# „obrócona”. Prostokąt otaczający słowo pisane po skosie to prawie cała
+# strona: ukośny znak wodny „SPECIMEN” (92 pt, 38°) na wyciągu bankowym
+# miał prostokąt 446 × 387 pt – pasek na nim zakrywał całą tabelę.
+ROTATION_TOLERANCE = 0.02
+# Napis jaśniejszy niż to na białym tle (0–255) uznajemy za blady znak wodny.
+FAINT_TEXT_LEVEL = 200
+# Wybielamy piksele od (jasność napisu − margines) w górę – margines łapie
+# napis na lekko szarym tle wierszy tabeli i wygładzone krawędzie liter.
+FAINT_MARGIN = 25
+
+
+def _rendered_level(span: dict) -> int:
+    """Jasność napisu na białym tle: kolor zmieszany z bielą według alfy."""
+    color, alpha = span.get("color", 0), span.get("alpha", 255) / 255
+    channels = ((color >> 16) & 255, (color >> 8) & 255, color & 255)
+    return int(min(255 - (255 - c) * alpha for c in channels))
+
+
+def _rotated_word_quads(page: pymupdf.Page) -> list[tuple[str, QuadBar]]:
+    """Słowa z obróconych linii i ich dokładne (obrócone) czworokąty."""
+    found = []
+    for block in page.get_text("rawdict")["blocks"]:
+        for line in block.get("lines", []):
+            direction = line["dir"]
+            if abs(direction[1]) <= ROTATION_TOLERANCE and direction[0] > 0:
+                continue
+            word: list[tuple[dict, dict]] = []
+            chars = [(span, char) for span in line["spans"] for char in span["chars"]]
+            for span, char in chars + [(None, None)]:
+                if char is not None and not char["c"].isspace():
+                    word.append((span, char))
+                    continue
+                if word:
+                    first = pymupdf.recover_char_quad(direction, *word[0])
+                    last = pymupdf.recover_char_quad(direction, *word[-1])
+                    text = "".join(c["c"] for _, c in word)
+                    level = min(_rendered_level(span) for span, _ in word)
+                    found.append((text, QuadBar(pymupdf.Quad(first.ul, last.ur, first.ll, last.lr),
+                                                level if level >= FAINT_TEXT_LEVEL else None)))
+                    word = []
+    return found
 
 
 def page_words(page: pymupdf.Page) -> list[PageWord]:
     """Lista słów strony w kolejności czytania (bez samej interpunkcji)."""
+    rotated = _rotated_word_quads(page)
     words = []
     for x0, y0, x1, y1, text, block, line, _ in page.get_text("words", sort=True):
         key = _normalize_word(text)
         if key:
-            words.append(PageWord(key, pymupdf.Rect(x0, y0, x1, y1), (block, line)))
+            rect = pymupdf.Rect(x0, y0, x1, y1)
+            quad = next((q for t, q in rotated if t == text and _same_box(q.quad.rect, rect)), None)
+            words.append(PageWord(key, rect, (block, line), quad))
     return words
+
+
+def _same_box(a: pymupdf.Rect, b: pymupdf.Rect) -> bool:
+    overlap = (a & b).get_area()
+    return overlap > 0.8 * max(a.get_area(), b.get_area(), 1e-6)
 
 
 def ocr_page_words(ocr_words: list[OcrWord]) -> list[PageWord]:
@@ -181,7 +250,7 @@ def _word_matches(page_key: str, target_key: str, first: bool, last: bool) -> bo
     return False
 
 
-def find_value_rects(words: list[PageWord], value: str) -> list[pymupdf.Rect]:
+def find_value_rects(words: list[PageWord], value: str) -> list["pymupdf.Rect | QuadBar"]:
     """Prostokąty, w których wartość występuje na stronie – CAŁYMI słowami.
 
     Wszystkie słowa wartości muszą stać obok siebie w tej samej kolejności
@@ -200,10 +269,13 @@ def find_value_rects(words: list[PageWord], value: str) -> list[pymupdf.Rect]:
         window = words[i:i + size]
         if all(_word_matches(word.key, key, first=(k == 0), last=(k == size - 1))
                for k, (word, key) in enumerate(zip(window, target))):
-            # Jeden pasek na każdą linię, którą zajmuje wartość.
+            # Jeden pasek na każdą linię, którą zajmuje wartość. Słowo obrócone
+            # dostaje własny, obrócony pasek (czworokąt), a nie prostokąt.
             by_line: dict[tuple[int, int], pymupdf.Rect] = {}
             for word in window:
-                if word.line in by_line:
+                if word.quad is not None:
+                    rects.append(word.quad)
+                elif word.line in by_line:
                     by_line[word.line] |= word.rect   # suma prostokątów
                 else:
                     by_line[word.line] = pymupdf.Rect(word.rect)
@@ -271,8 +343,40 @@ def _black(pixmap: pymupdf.Pixmap) -> tuple:
     return (0,) * (pixmap.n - 1) + (255,) if pixmap.alpha else (0,) * pixmap.n
 
 
+def _burn_quad(pixmap: pymupdf.Pixmap, bar: QuadBar) -> None:
+    """Pasek na tekście pisanym po skosie (czworokąt w pikselach).
+
+    Zwykły napis: czarny czworokąt. Blady znak wodny: wybielenie jasnych
+    pikseli w czworokącie – litery znikają (nie da się ich odczytać), a ciemny
+    tekst, który leży na znaku wodnym, zostaje.
+    """
+    import numpy as np
+
+    quad = bar.quad
+    corners = [quad.ul, quad.ur, quad.lr, quad.ll]
+    box = quad.rect.irect & pixmap.irect
+    if box.is_empty:
+        return
+    ys, xs = np.mgrid[box.y0:box.y1, box.x0:box.x1] + 0.5
+    inside_pos = np.ones(xs.shape, dtype=bool)
+    inside_neg = np.ones(xs.shape, dtype=bool)
+    for a, b in zip(corners, corners[1:] + corners[:1]):
+        cross = (b.x - a.x) * (ys - a.y) - (b.y - a.y) * (xs - a.x)
+        inside_pos &= cross >= 0
+        inside_neg &= cross <= 0
+    mask = inside_pos | inside_neg            # wewnątrz przy obu kierunkach obiegu
+    pixels = np.frombuffer(pixmap.samples_mv, dtype=np.uint8).reshape(pixmap.height, pixmap.width, pixmap.n)
+    region = pixels[box.y0:box.y1, box.x0:box.x1]
+    if bar.faint_level is None:
+        region[mask] = _black(pixmap)
+        return
+    colors = region[:, :, : min(3, pixmap.n)]
+    light = mask & (colors.min(axis=2) >= bar.faint_level - FAINT_MARGIN)
+    region[light] = (255,) * pixmap.n
+
+
 def burn_bars(pixmap: pymupdf.Pixmap, page: pymupdf.Page,
-              rects: list[pymupdf.Rect], dpi: int) -> None:
+              rects: list["pymupdf.Rect | QuadBar"], dpi: int) -> None:
     """Wypala czarne paski bezpośrednio w pikselach wyrenderowanej strony.
 
     Dlaczego nie page.draw_rect() przed renderowaniem? Pola formularza
@@ -287,6 +391,9 @@ def burn_bars(pixmap: pymupdf.Pixmap, page: pymupdf.Page,
     # Współrzędne tekstu -> piksele: obrót strony (jeśli jest) i skala dpi.
     matrix = page.rotation_matrix * pymupdf.Matrix(dpi / 72, dpi / 72)
     for rect in rects:
+        if isinstance(rect, QuadBar):
+            _burn_quad(pixmap, rect * matrix)
+            continue
         bar = pymupdf.Rect(rect.x0, rect.y0 + rect.height * TOP_SHRINK, rect.x1, rect.y1)
         pixel_rect = (bar * matrix).irect & pixmap.irect
         if not pixel_rect.is_empty:

@@ -227,6 +227,12 @@ który dałoby się usunąć w edytorze PDF.
 także przez złamanie linii. Wcześniejsze `search_for()` szukało podciągów, a tryb awaryjny „słowo po słowie”
 zaczerniał każde „ul.” i „2009”. Na 6-stronicowym skanie było to 844 paski zamiast 123.
 
+**Tekst po skosie (znaki wodne).** Słowo w obróconej linii dostaje pasek w kształcie obróconego czworokąta,
+a nie prostokąt otaczający. Ukośny znak wodny „SPECIMEN” (92 pt) na wyciągu bankowym miał prostokąt
+446 × 387 pt i pasek na nim zakrywał całą tabelę. Blady, półprzezroczysty napis (na białym tle jaśniejszy niż
+200/255) nie dostaje czarnego czworokąta: w jego obrębie wybielamy tylko jasne piksele, więc napis znika,
+a ciemny tekst tabeli, który na nim leży, zostaje czytelny.
+
 ## Architektura hybrydowa
 
 ```
